@@ -31,4 +31,12 @@ public class GetHardworkInfo {
     public List<Hardwork> selectBysome(Hardwork hardwork){
         return hardworkmapper.selectBySome(hardwork);
     }
+    public String deleteById(String id){
+        Integer rows = hardworkmapper.deleteById(id);
+        System.out.println(rows);
+        if(rows < 1){
+            return "该机械编号不存在！";
+        }
+        return "success";
+    }
 }

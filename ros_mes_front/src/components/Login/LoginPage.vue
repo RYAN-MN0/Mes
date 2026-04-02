@@ -10,7 +10,7 @@
         ref="loginFormRef"
         :model="loginForm"
         :rules="formRules"
-        label-width="0"
+        label-width="0px"
       >
         <el-form-item prop="account" label="账号" label-width="auto">
           <el-input
@@ -54,7 +54,7 @@
         ref="registerFormRef"
         :model="registerForm"
         :rules="formRules"
-        label-width="0"
+        label-width="0px"
       >
         <el-form-item prop="account">
           <el-input
@@ -186,6 +186,7 @@ const handleLogin = async () => {
       localStorage.setItem("token", response.data.token + String(response.data.updateToken));
 
       router.push("/");
+      router.replace("/");
     })
     .catch((error) => {
       loading.value = false;

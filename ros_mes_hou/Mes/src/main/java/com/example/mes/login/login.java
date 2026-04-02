@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import com.example.mes.pojo.Result;
 import com.example.mes.pojo.User;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.Random;
 
 @RestController
@@ -26,8 +26,8 @@ public class login {
             token[i] = (char) index;
         }
         user.setToken(new String(token));
-        user.setUpdateToken(LocalDateTime.now());
-        int rows = usermapper.updatetoken(user);
+        user.setUpdateToken(new Date());
+        int rows = usermapper.updateToken(user);
         if(rows < 0){
             return Result.error(400,"服务器错误，请重试");
         }

@@ -7,7 +7,7 @@
         select id,device_name,type,spec,status,update_time,create_time from hardwork
     </select>
         <delete id="deleteById" >
-            delete from user where id = #{id}
+            delete from hardwork where id = #{id}
         </delete>
     <insert id="add">
         insert into hardwork values(#{id},#{deviceName},#{type},#{spec},#{status},#{updateTime},#{createTime})
@@ -17,19 +17,13 @@
         select * from hardwork
         <where>
             <if test="id != null and id != ''" >
-                and (id like #{id}) or (device_name like #{id})
+                and (id like #{id} or device_name like #{id})
             </if>
             <if test="status != null and status != ''">
                 and status = #{status}
             </if>
             <if test="type != null and type != ''">
                 and type = #{type}
-            </if>
-            <if test="updateTime != null and updateTime != ''">
-                and update_time = #{updateTime}
-            </if>
-            <if test="createTime != null and createTime != ''">
-                and create_time = #{createTime}
             </if>
         </where>
     </select>
