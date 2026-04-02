@@ -2,11 +2,9 @@ package com.example.mes.login;
 
 import com.example.mes.mapper.Usermapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-import pojo.Result;
-import pojo.User;
+import org.springframework.web.bind.annotation.*;
+import com.example.mes.pojo.Result;
+import com.example.mes.pojo.User;
 
 import java.time.LocalDateTime;
 import java.util.Random;
@@ -16,10 +14,10 @@ public class login {
     @Autowired
     private Usermapper usermapper;
     @PutMapping("/user")
-    public Result logging(@RequestParam("account") String account, @RequestParam("password") String password){
+    public Result logging(String account, String password){
         User user = usermapper.selectAccount(account,password);
         if(user == null){
-            return Result.error("账号密码错误");
+            return Result.error(400,"账号密码错误");
         }
         Random random = new Random();
         char [] token = new char[12];
@@ -31,7 +29,7 @@ public class login {
         user.setUpdateToken(LocalDateTime.now());
         int rows = usermapper.updatetoken(user);
         if(rows < 0){
-            return Result.error("服务器错误，请重试");
+            return Result.error(400,"服务器错误，请重试");
         }
         return Result.success(user);
     }

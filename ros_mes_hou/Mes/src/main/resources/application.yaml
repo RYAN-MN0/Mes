@@ -8,13 +8,11 @@ spring:
     password: 123456
 
 server:
-  port: 8090
+  port: 8091
   address: 0.0.0.0
 mybatis:
   configuration:
-#    匹配驼峰法与下划线法的命名方式
     map-underscore-to-camel-case: true
-#    开启Mybatics日志输出
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-#  XML映射配置文件的路径
-#  mapper-locations: classpath:mapper/*.xml
+  mapper-locations: classpath:com/example/mes/mapper/*.xml
+  type-aliases-package: com.example.mes.pojo
