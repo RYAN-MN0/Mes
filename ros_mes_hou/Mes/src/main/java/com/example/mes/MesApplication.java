@@ -12,13 +12,13 @@ import java.net.URI;
 @SpringBootApplication
 public class MesApplication{
     public static void main(String[] args) {
-//        Getdata.start();
+        Getdata.start();
         SpringApplication.run(MesApplication.class, args);
         // 发送字符串
-//        Getdata.getClient().sendToRos("hello");
+        Getdata.getClient().sendToRos("hello");
 
-        // 发送 JSON 指令（机械臂控制）
-//        Getdata.getClient().sendToRos("{\"action\":\"move\",\"speed\":0.5}");
+//         发送 JSON 指令（机械臂控制）
+        Getdata.getClient().sendToRos("{\"action\":\"move\",\"speed\":0.5}");
     }
 }
 

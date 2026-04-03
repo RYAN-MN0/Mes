@@ -12,7 +12,7 @@
         :rules="formRules"
         label-width="0px"
       >
-        <el-form-item prop="account" label="账号" label-width="auto">
+        <el-form-item prop="account" label="账号" label-width="50px">
           <el-input
             v-model="loginForm.account"
             placeholder="请输入操作员账号"
@@ -21,7 +21,7 @@
           />
         </el-form-item>
 
-        <el-form-item prop="password" label="密码" label-width="auto">
+        <el-form-item prop="password" label="密码" label-width="50px">
           <el-input
             v-model="loginForm.password"
             type="password"

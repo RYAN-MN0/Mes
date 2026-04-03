@@ -113,7 +113,7 @@ const search = async () => {
 
 onMounted(async () => {
   try {
-    request.get("/hardwork").then((res) => {
+    request.get("/hardwork").then((res:any) => {
       hardworks.value = res.data;
     });
   } catch (err) {
