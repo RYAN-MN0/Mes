@@ -1,390 +1,291 @@
 <template>
-  <div class="arm-adjust-container">
-    <!-- 顶部导航区 -->
-    <el-page-header content="机械臂姿态微调与压力监控">
-      <template #extra>
-        <el-tag :type="rosStatus ? 'success' : 'danger'">
-          {{ rosStatus ? 'ROS已连接' : 'ROS断开连接' }}
-        </el-tag>
-        <el-button @click="saveConfig">保存配置</el-button>
-        <el-button @click="resetConfig" type="warning">重置参数</el-button>
-        <el-button @click="openHistory" type="primary">历史记录</el-button>
-      </template>
-    </el-page-header>
-
-    <!-- 核心操作区：3台机械臂 -->
-    <div class="arm-list">
-      <div class="arm-item" v-for="(arm, index) in armList" :key="arm.id">
-        <el-card :header="`机械臂${index+1}（编号：${arm.id}）`" shadow="hover">
-          <!-- 硬件微调面板 -->
-          <el-form :model="arm.hardware" label-width="auto">
-            <!-- 底座旋转 -->
-            <el-form-item label="底座旋转(°)" >
-              <div class="adjust-group">
-                <el-input-number 
-                  v-model="arm.hardware.rotate.adjustValue" 
-                  :min="0" :max="360" 
-                  @change="updateAdjustValue(arm, 'rotate')">
-                </el-input-number>
-                <span class="current-value">当前值：{{ arm.hardware.rotate.currentValue }}°</span>
-                <el-button size="small" @click="sendSingleArm(arm)" type="primary">下发微调</el-button>
-              </div>
-            </el-form-item>
-
-            <!-- 中间摆动 -->
-            <el-form-item label="中间摆动(°)">
-              <div class="adjust-group">
-                <el-input-number 
-                  v-model="arm.hardware.swing.adjustValue" 
-                  :min="-90" :max="90" 
-                  @change="updateAdjustValue(arm, 'swing')">
-                </el-input-number>
-                <span class="current-value">当前值：{{ arm.hardware.swing.currentValue }}°</span>
-                <el-button size="small" @click="sendSingleArm(arm)" type="primary">下发微调</el-button>
-              </div>
-            </el-form-item>
-
-            <!-- 伸缩杆 -->
-            <el-form-item label="伸缩杆(cm)">
-              <div class="adjust-group">
-                <el-input-number 
-                  v-model="arm.hardware.telescope.adjustValue" 
-                  :min="10" :max="50" 
-                  :step="0.5"
-                  @change="updateAdjustValue(arm, 'telescope')">
-                </el-input-number>
-                <span class="current-value">当前值：{{ arm.hardware.telescope.currentValue }}cm</span>
-                <el-button size="small" @click="sendSingleArm(arm)" type="primary">下发微调</el-button>
-              </div>
-            </el-form-item>
-          </el-form>
-
-          <!-- 压力传感器 -->
-          <div class="pressure-info">
-            <el-tag :type="getPressureTagType(arm.pressure)">
-              压力传感器：{{ arm.pressure }} N
-            </el-tag>
-          </div>
-        </el-card>
+  <div class="fine-tuning-container">
+    <!-- 顶部静态文字和按钮 -->
+    <div class="header-bar">
+      <div class="header-left">
+        <el-button type="default" @click="goBack" class="back-button">
+          &lt; Back
+        </el-button>
+        <span class="header-title">机械臂姿态微调与压力监控</span>
+      </div>
+      <div class="header-right">
+        <el-button type="primary">ROS连接</el-button>
+        <el-button type="success">保存配置</el-button>
+        <el-button type="warning">重置参数</el-button>
+        <el-button type="info">历史记录</el-button>
       </div>
     </div>
 
-    <!-- 批量操作区 -->
-    <div class="batch-operation">
-      <el-input-number v-model="step" label="统一微调步长" :min="1" :max="10" style="width: 200px;"></el-input-number>
-      <el-button type="primary" @click="sendBatchArm">批量下发所有微调</el-button>
-      <el-button @click="syncPressure">同步压力值</el-button>
+    <!-- ========== 1. 当前操作信息展示 ========== -->
+    <el-alert
+        title="当前操作上下文"
+        :description="`模块编号: ${moduleId} | 选中的机械臂: ${currentDeviceIdHex}`"
+        type="info"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 20px;"
+    />
+
+    <!-- ========== 2. 三个机械臂的微调面板 ========== -->
+    <div class="arm-list">
+      <el-card
+          v-for="arm in armList"
+          :key="arm.id"
+          :header="`机械臂 ${arm.idHex}`"
+          shadow="hover"
+          class="arm-card"
+      >
+        <el-form label-width="100px">
+          <!-- 旋转轴 -->
+          <el-form-item label="旋转轴调整值(°)">
+            <el-input-number
+                v-model="arm.adjust.rotate"
+                :min="-360" :max="360"
+                placeholder="顺时针为正"
+            />
+            <span class="current-value">当前实际值: {{ arm.current.rotate }}°</span>
+          </el-form-item>
+
+          <!-- 摆动轴 -->
+          <el-form-item label="摆动轴调整值(°)">
+            <el-input-number
+                v-model="arm.adjust.swing"
+                :min="-90" :max="90"
+            />
+            <span class="current-value">当前实际值: {{ arm.current.swing }}°</span>
+          </el-form-item>
+
+          <!-- 伸缩杆 -->
+          <el-form-item label="伸缩杆调整值(cm)">
+            <el-input-number
+                v-model="arm.adjust.telescope"
+                :min="-20" :max="20"
+                :step="0.5"
+            />
+            <span class="current-value">当前实际值: {{ arm.current.telescope }}cm</span>
+          </el-form-item>
+
+          <!-- 单个机械臂下发按钮 -->
+          <el-form-item>
+            <el-button type="primary" @click="sendSingleAdjust(arm)">下发微调</el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
     </div>
 
+    <!-- ========== 3. 批量操作栏 ========== -->
+    <div class="batch-bar">
+      <el-button type="success" @click="sendBatchAdjust">批量下发所有机械臂</el-button>
+      <el-button @click="resetAllAdjust">重置所有调整值</el-button>
+    </div>
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import * as echarts from 'echarts'
-import axios from 'axios'
+<script setup lang="ts">
+import { ref, reactive, onMounted, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
+import request from '@/utils/request';
 
-// 基础数据定义
-const rosStatus = ref(true) // ROS连接状态
-const step = ref(5) // 统一微调步长
-const historyVisible = ref(false)
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
+const router = useRouter();
 
-// 机械臂数据（3台）
+// ========== 1. 路由参数获取 ==========
+const route = useRoute();
+const moduleId = ref<number>(0);                // 当前操作的模块编号
+const currentDeviceId = ref<number>(0);         // 模块管理页面选中的机械臂编号
+const currentDeviceIdHex = computed(() => `0x${currentDeviceId.value.toString(16)}`);
+
+// ========== 2. 机械臂数据定义 ==========
+// 每个机械臂包含：
+// - id: 设备编号（0x20,0x40,0x60）
+// - adjust: 用户输入的待下发增量（角度或长度）
+// - current: 机械臂当前实际姿态（从后端获取，此处用模拟初始值）
 const armList = reactive([
   {
-    id: 'ARM-001',
-    hardware: {
-      rotate: { currentValue: 150, adjustValue: 0 }, // 底座旋转
-      swing: { currentValue: 30, adjustValue: 0 },    // 中间摆动
-      telescope: { currentValue: 25, adjustValue: 0 } // 伸缩杆
-    },
-    pressure: 12.5 // 压力值(N)
+    id: 0x20,
+    idHex: '0x20',
+    adjust: { rotate: 0, swing: 0, telescope: 0 },
+    current: { rotate: 150, swing: 30, telescope: 25 },   // 模拟初始值
   },
   {
-    id: 'ARM-002',
-    hardware: {
-      rotate: { currentValue: 160, adjustValue: 0 },
-      swing: { currentValue: 25, adjustValue: 0 },
-      telescope: { currentValue: 24, adjustValue: 0 }
-    },
-    pressure: 15.2
+    id: 0x40,
+    idHex: '0x40',
+    adjust: { rotate: 0, swing: 0, telescope: 0 },
+    current: { rotate: 160, swing: 25, telescope: 24 },
   },
   {
-    id: 'ARM-003',
-    hardware: {
-      rotate: { currentValue: 145, adjustValue: 0 },
-      swing: { currentValue: 35, adjustValue: 0 },
-      telescope: { currentValue: 26, adjustValue: 0 }
-    },
-    pressure: 18.8
+    id: 0x60,
+    idHex: '0x60',
+    adjust: { rotate: 0, swing: 0, telescope: 0 },
+    current: { rotate: 145, swing: 35, telescope: 26 },
+  },
+]);
+
+// ========== 3. 单个机械臂微调（核心接口） ==========
+// 接口：POST /module
+// 参数：{ module_id, device_id, position: [旋转增量, 摆动增量, 伸缩增量] }
+const sendSingleAdjust = async (arm: any) => {
+  const position = [arm.adjust.rotate, arm.adjust.swing, arm.adjust.telescope];
+
+  // 检查是否有非零调整值
+  if (position.every(v => v === 0)) {
+    ElMessage.warning('请至少输入一个非零调整值');
+    return;
   }
-])
 
-// 历史记录数据
-const historyList = ref([])
+  console.log('微调请求参数:', {
+    module_id: moduleId.value,
+    device_id: arm.id,
+    position
+  });
 
-// 压力均衡度计算
-const balanceValue = computed(() => {
-  const p1 = armList[0].pressure
-  const p2 = armList[1].pressure
-  const p3 = armList[2].pressure
-  return Math.abs(p1 - p2) + Math.abs(p2 - p3) + Math.abs(p1 - p3)
-})
-
-const balanceDesc = computed(() => {
-  const val = balanceValue.value
-  if (val < 5) return '均衡（优）'
-  if (val < 10) return '基本均衡（良）'
-  return '不均衡（差）'
-})
-
-const balanceTips = computed(() => {
-  const pressures = armList.map(item => item.pressure)
-  const maxIndex = pressures.indexOf(Math.max(...pressures))
-  return `建议微调机械臂${maxIndex+1}伸缩杆，降低压力值`
-})
-
-// 压力值标签类型
-const getPressureTagType = (pressure) => {
-  if (pressure < 10) return 'success'
-  if (pressure < 20) return 'warning'
-  return 'danger'
-}
-
-// 均衡度标签类型
-const getBalanceTagType = () => {
-  const val = balanceValue.value
-  if (val < 5) return 'success'
-  if (val < 10) return 'warning'
-  return 'danger'
-}
-
-// 硬件数值微调
-const adjustValue = (arm, type, val) => {
-  arm.hardware[type].adjustValue += val
-  // 限制范围
-  if (type === 'rotate') {
-    arm.hardware[type].adjustValue = Math.max(0, Math.min(360, arm.hardware[type].adjustValue))
-  } else if (type === 'swing') {
-    arm.hardware[type].adjustValue = Math.max(-90, Math.min(90, arm.hardware[type].adjustValue))
-  } else if (type === 'telescope') {
-    arm.hardware[type].adjustValue = Math.max(10, Math.min(50, arm.hardware[type].adjustValue))
-  }
-}
-
-// 更新微调后的值（预览）
-const updateAdjustValue = (arm, type) => {
-  // 此处仅预览，实际下发后更新currentValue
-}
-
-// 单台机械臂下发微调
-const sendSingleArm = async (arm) => {
   try {
-    // 构造请求参数
-    const params = {
-      armId: arm.id,
-      hardware: [
-        { type: 'rotate', adjustValue: arm.hardware.rotate.adjustValue },
-        { type: 'swing', adjustValue: arm.hardware.swing.adjustValue },
-        { type: 'telescope', adjustValue: arm.hardware.telescope.adjustValue }
-      ]
-    }
-    // 调用后端接口
-    const res = await axios.post('/api/arm/adjust/single', params)
-    if (res.data.code === 200) {
-      ElMessage.success(`机械臂${arm.id}微调下发成功`)
-      // 更新当前值和压力值
-      arm.hardware.rotate.currentValue = res.data.data.rotate
-      arm.hardware.swing.currentValue = res.data.data.swing
-      arm.hardware.telescope.currentValue = res.data.data.telescope
-      arm.pressure = res.data.data.pressure
-      // 重置微调值
-      arm.hardware.rotate.adjustValue = 0
-      arm.hardware.swing.adjustValue = 0
-      arm.hardware.telescope.adjustValue = 0
-      // 更新图表
-      updatePressureChart()
+    const res = await request.post('/module', {
+      module_id: moduleId.value,
+      device_id: arm.id,
+      position
+    });
+
+    if (res && res.code === 200) {
+      ElMessage.success(`机械臂 ${arm.idHex} 微调成功`);
+
+      // 重要：根据后端返回更新当前实际值（这里假设后端返回新的 current 值）
+      // 如果后端返回了新的姿态数据，应使用 res.data 更新
+      // 示例：arm.current.rotate = res.data.rotate 等
+      // 由于文档未明确返回格式，这里模拟加法（实际应以后端返回为准）
+      arm.current.rotate += arm.adjust.rotate;
+      arm.current.swing += arm.adjust.swing;
+      arm.current.telescope += arm.adjust.telescope;
+
+      // 清空本次调整值
+      arm.adjust.rotate = 0;
+      arm.adjust.swing = 0;
+      arm.adjust.telescope = 0;
     } else {
-      ElMessage.error(res.data.msg)
+      ElMessage.error(res?.msg || '微调失败');
     }
-  } catch (error) {
-    ElMessage.error('下发失败：' + error.message)
+  } catch (err: any) {
+    ElMessage.error(err?.message || '请求失败，请检查后端服务');
   }
-}
+};
 
-// 批量下发所有机械臂
-const sendBatchArm = async () => {
-  try {
-    await ElMessageBox.confirm('确定批量下发所有机械臂微调参数？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    // 构造请求参数
-    const params = armList.map(arm => ({
-      armId: arm.id,
-      hardware: [
-        { type: 'rotate', adjustValue: arm.hardware.rotate.adjustValue },
-        { type: 'swing', adjustValue: arm.hardware.swing.adjustValue },
-        { type: 'telescope', adjustValue: arm.hardware.telescope.adjustValue }
-      ]
-    }))
-    // 调用后端接口
-    const res = await axios.post('/api/arm/adjust/batch', params)
-    if (res.data.code === 200) {
-      ElMessage.success('批量下发成功')
-      // 更新所有机械臂数据
-      res.data.data.forEach(item => {
-        const arm = armList.find(a => a.id === item.armId)
-        if (arm) {
-          arm.hardware.rotate.currentValue = item.rotate
-          arm.hardware.swing.currentValue = item.swing
-          arm.hardware.telescope.currentValue = item.telescope
-          arm.pressure = item.pressure
-          // 重置微调值
-          arm.hardware.rotate.adjustValue = 0
-          arm.hardware.swing.adjustValue = 0
-          arm.hardware.telescope.adjustValue = 0
-        }
-      })
-      // 更新图表
-      updatePressureChart()
-    } else {
-      ElMessage.error(res.data.msg)
-    }
-  } catch (error) {
-    if (error.message !== 'cancel') {
-      ElMessage.error('批量下发失败：' + error.message)
-    }
+// ========== 4. 批量微调 ==========
+// 遍历所有机械臂，对每个有非零调整值的机械臂调用 sendSingleAdjust
+const sendBatchAdjust = async () => {
+  const tasks = armList.filter(arm =>
+      arm.adjust.rotate !== 0 || arm.adjust.swing !== 0 || arm.adjust.telescope !== 0
+  );
+
+  if (tasks.length === 0) {
+    ElMessage.warning('没有待下发的调整值');
+    return;
   }
-}
 
-// 同步压力值
-const syncPressure = async () => {
-  try {
-    const res = await axios.get('/api/arm/pressure/sync')
-    if (res.data.code === 200) {
-      res.data.data.forEach(item => {
-        const arm = armList.find(a => a.id === item.armId)
-        if (arm) arm.pressure = item.pressure
-      })
-      ElMessage.success('压力值同步成功')
-      updatePressureChart()
-    } else {
-      ElMessage.error(res.data.msg)
-    }
-  } catch (error) {
-    ElMessage.error('同步失败：' + error.message)
-  }
-}
+  // 并行发送所有请求
+  const promises = tasks.map(arm => sendSingleAdjust(arm));
+  await Promise.all(promises);
+  ElMessage.success('批量微调指令已全部发送');
+};
 
-// 保存配置
-const saveConfig = () => {
-  ElMessage.success('配置已保存')
-  // 实际项目中调用保存接口
-}
-
-// 重置参数
-const resetConfig = () => {
+// ========== 5. 辅助功能 ==========
+const resetAllAdjust = () => {
   armList.forEach(arm => {
-    arm.hardware.rotate.adjustValue = 0
-    arm.hardware.swing.adjustValue = 0
-    arm.hardware.telescope.adjustValue = 0
-  })
-  ElMessage.info('参数已重置')
-}
+    arm.adjust.rotate = 0;
+    arm.adjust.swing = 0;
+    arm.adjust.telescope = 0;
+  });
+  ElMessage.info('所有调整值已重置');
+};
 
-// 打开历史记录
-const openHistory = async () => {
-  historyVisible.value = true
-  // 调用历史记录接口
-  try {
-    const res = await axios.get('/api/arm/history', {
-      params: { page: currentPage.value, size: pageSize.value }
-    })
-    historyList.value = res.data.data.list
-    total.value = res.data.data.total
-  } catch (error) {
-    ElMessage.error('加载历史记录失败：' + error.message)
+// 返回模块管理页面
+const goBack = () => {
+  router.push('/moduleManagement');
+};
+
+// ========== 6. 页面初始化 ==========
+onMounted(() => {
+  const qModuleId = route.query.module_id;
+  const qDeviceId = route.query.device_id;
+
+  if (qModuleId) {
+    moduleId.value = parseInt(qModuleId as string);
+  } else {
+    ElMessage.warning('未获取到模块编号，请从模块管理页面进入');
   }
-}
 
+  if (qDeviceId) {
+    currentDeviceId.value = parseInt(qDeviceId as string);
+  }
 
+  console.log('微调页面初始化完成', {
+    module_id: moduleId.value,
+    device_id: currentDeviceId.value
+  });
 
+  // 可选：页面加载时从后端获取所有机械臂的当前实际姿态值
+  // 这里留空，待后端提供接口后可调用
+});
 </script>
 
 <style scoped>
+/* 样式略，与之前一致，保证布局整洁 */
+.fine-tuning-container {
+  padding: 20px;
+  background-color: #fff;
+  height: calc(100vh - 150px);
+  overflow: auto;
+}
 
-.arm-list {
+.header-bar {
   display: flex;
-  gap: 20px;
-  margin: 20px 0;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e4e7ed;
 }
 
-.arm-item {
-  flex: 1;
-  min-width: 440px;
-}
-
-.adjust-group {
+.header-left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.current-value {
-  margin-left: 10px;
-  color: #666;
+.back-button {
+  font-size: 14px;
 }
 
-.pressure-info {
-  margin-top: 20px;
-  padding: 10px;
-  background-color: #f0f2f5;
-  border-radius: 4px;
-}
-
-.batch-operation {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin: 20px 0;
-  padding: 10px;
-  background-color: #fff;
-  border-radius: 4px;
-}
-
-.monitor-area {
-  display: flex;
-  gap: 20px;
-  margin: 20px 0;
-}
-
-.balance-info {
-  text-align: center;
-  padding: 20px;
-}
-
-.balance-value {
-  font-size: 32px;
+.header-title {
+  font-size: 18px;
   font-weight: bold;
-  color: #1989fa;
-  margin-bottom: 10px;
+  color: #333;
 }
 
-.balance-tips {
-  margin-top: 10px;
+.header-right {
+  display: flex;
+  gap: 10px;
+}
+.arm-list {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.arm-card {
+  flex: 1;
+  min-width: 380px;
+}
+.current-value {
+  margin-left: 12px;
+  font-size: 12px;
   color: #666;
 }
-.el-form-item{
-        max-width: 440px;
-    margin: auto;
-    margin-bottom: 18px;
+.batch-bar {
+  margin-top: 24px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
 }
-
+.el-form-item {
+  margin-bottom: 18px;
+}
 </style>

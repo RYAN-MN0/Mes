@@ -1,16 +1,26 @@
 <template>
   <div class="common-layout" style="height:100%">
     <el-container style="height:100%">
-      <el-container>
+      <!-- <el-container>
         <Aside></Aside>
         <el-container>
           <el-main style="background-color: #f5f7fa; padding: 20px; height:100%; overflow:scroll">
             <div>
-              <HardWorkPage></HardWorkPage>
-              <!-- <FineTuningPage></FineTuningPage> -->
+              <Head></Head>
+             <HardWorkPage></HardWorkPage>
+              <FineTuningPage></FineTuningPage>
+              <router-view></router-view>
             </div>
           </el-main>
         </el-container>
+      </el-container> -->
+
+
+       <el-aside width="200px" height="100%"><Aside></Aside></el-aside>
+
+      <el-container>
+        <el-header><Head></Head></el-header>
+        <el-main><router-view></router-view></el-main>
       </el-container>
     </el-container>
   </div>
@@ -18,26 +28,27 @@
 
 
 <script lang="ts" setup>
-import Aside from '@/components/Main/AsidePage.vue';
-import FineTuningPage from '@/components/Main/ModulePage/FineTuningPage.vue';
-import HardWorkPage from '@/components/Main/Hardwork/HardWorkPage.vue';
+import Aside from '../Main/AsidePage.vue';
+import FineTuningPage from '../Main/ModulePage/FineTuningPage.vue';
+import HardWorkPage from '../Main/Hardwork/HardWorkPage.vue';
+import Head from  '../Head/head.vue'
 
 
 </script>
 
 <style>
-.top{
-  position: fixed;
+.common-layout{
+  height: 100%;
   width: 100%;
-  background-color: #fff;
-  z-index: 1000;
+  background-color: #ffff;
 }
-.main{
-  position: relative;
-  margin-top: 60px;
-  z-index: 0;
+.common-layout .el-container{
+  background-color: #eff5f4;
+  height: 100%;
 }
-ul{
-  background-color: #d7e3fd;
+.common-layout .el-header {
+  padding: 0;
+  /* margin: 0; */
+  height: 60px;
 }
 </style>

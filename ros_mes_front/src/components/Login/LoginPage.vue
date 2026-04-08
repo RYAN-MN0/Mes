@@ -49,65 +49,66 @@
         </div>
       </el-form>
 
-      <el-form
-        v-else
-        ref="registerFormRef"
-        :model="registerForm"
-        :rules="formRules"
-        label-width="0px"
-      >
-        <el-form-item prop="account">
-          <el-input
-            v-model="registerForm.account"
-            placeholder="设置操作员账号"
-            prefix-icon="User"
-            clearable
-          />
-        </el-form-item>
+<!--      <el-form-->
+<!--        v-else-->
+<!--        ref="registerFormRef"-->
+<!--        :model="registerForm"-->
+<!--        :rules="formRules"-->
+<!--        label-width="0px"-->
+<!--      >-->
+<!--        <el-form-item prop="account">-->
+<!--          <el-input-->
+<!--            v-model="registerForm.account"-->
+<!--            placeholder="设置操作员账号"-->
+<!--            prefix-icon="User"-->
+<!--            clearable-->
+<!--          />-->
+<!--        </el-form-item>-->
 
-        <el-form-item prop="password">
-          <el-input
-            v-model="registerForm.password"
-            type="password"
-            placeholder="设置高强度密码"
-            prefix-icon="Lock"
-            show-password
-          />
-        </el-form-item>
+<!--        <el-form-item prop="password">-->
+<!--          <el-input-->
+<!--            v-model="registerForm.password"-->
+<!--            type="password"-->
+<!--            placeholder="设置高强度密码"-->
+<!--            prefix-icon="Lock"-->
+<!--            show-password-->
+<!--          />-->
+<!--        </el-form-item>-->
 
-        <el-form-item prop="confirmPassword">
-          <el-input
-            v-model="registerForm.confirmPassword"
-            type="password"
-            placeholder="再次确认密码"
-            prefix-icon="Lock"
-            show-password
-          />
-        </el-form-item>
+<!--        <el-form-item prop="confirmPassword">-->
+<!--          <el-input-->
+<!--            v-model="registerForm.confirmPassword"-->
+<!--            type="password"-->
+<!--            placeholder="再次确认密码"-->
+<!--            prefix-icon="Lock"-->
+<!--            show-password-->
+<!--          />-->
+<!--        </el-form-item>-->
 
-        <el-alert
-          title="注意：注册后需管理员审核通过方可登录"
-          type="warning"
-          show-icon
-          :closable="false"
-          class="audit-alert"
-        />
+<!--        <el-alert-->
+<!--          title="注意：注册后需管理员审核通过方可登录"-->
+<!--          type="warning"-->
+<!--          show-icon-->
+<!--          :closable="false"-->
+<!--          class="audit-alert"-->
+<!--        />-->
 
-        <el-form-item>
-          <el-button
-            type="success"
-            class="submit-btn"
-            :loading="loading"
-            >提交注册申请</el-button
-          >
-        </el-form-item>
+<!--        <el-form-item>-->
+<!--          <el-button-->
+<!--            type="success"-->
+<!--            class="submit-btn"-->
+<!--            :loading="loading"-->
+<!--            >提交注册申请</el-button-->
+<!--          >-->
+<!--        </el-form-item>-->
 
-        <div class="toggle-action">
-          <el-link type="info" underline="never" @click="isLogin = true"
-            >返回登录</el-link
-          >
-        </div>
-      </el-form>
+<!--        <div class="toggle-action">-->
+<!--          <el-link type="info" underline="never" @click="isLogin = true"-->
+<!--            >返回登录</el-link-->
+<!--          >-->
+<!--        </div>-->
+<!--      </el-form>-->
+<!--    -->
     </el-card>
   </div>
 </template>
@@ -116,10 +117,11 @@
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus"; // 引入消息提示组件
 import router from "@/router";
-import { userStore } from "@/stores/user";
+import { useUserStore } from "@/stores/user";
 import request from "@/utils/request";
 
-const user = userStore();
+
+const userStore = useUserStore();
 
 // 1. 状态控制
 const isLogin = ref(true); // true为登录页，false为注册页
@@ -162,41 +164,117 @@ const formRules = reactive({
   ]
 });
 
+
+// 模拟登录函数（后端准备好后替换为真实接口）
+const mockLogin = (account: string, password: string): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      // 模拟一个正确的账号密码（可自行修改）
+      if (account === "admin" && password === "123456") {
+        resolve({
+          code: 200,
+          data: {
+            account: "admin",
+            token: "mock-token-xyz",
+            updateTime: new Date().toISOString(),
+          },
+          msg: "登录成功",
+        });
+      } else {
+        reject({
+          response: {
+            status: 400,
+            data: { msg: "账号或密码错误" },
+          },
+        });
+      }
+    }, 500);
+  });
+};
+
+
+
 // 6. 登录按钮点击事件
 const handleLogin = async () => {
+  //表单校验
   try{
    await loginFormRef.value?.validate()
   }catch(error){
     return ;
   }
+
   loading.value = true;
-  await request
-    .put("/user", {
-      account: loginForm.account,
-      password: loginForm.password,
-    }).then((response) => {
-      if(response.code !== 200) {
-        loading.value = false;
-        ElMessage.error(response.msg);
-        return;
-      }
-      ElMessage.success("登录成功！即将跳转大屏...");
 
-      user.setUserInfo(response.data);
-      localStorage.setItem("token", response.data.token + String(response.data.updateToken));
+// ========== 模拟数据方式（当前使用）==========
+  try {
+    const response = await mockLogin(loginForm.account, loginForm.password);
+    if (response.code === 200) {
+      ElMessage.success("登录成功！即将跳转...");
+      userStore.setUserInfo(response.data);
+      await router.replace("/");
+    } else {
+      ElMessage.error(response.msg || "登录失败");
+    }
+  } catch (error: any) {
+    const errMsg = error.response?.data?.msg || error.message || "登录请求失败";
+    ElMessage.error(errMsg);
+  } finally {
+    loading.value = false;
+  }
 
-      router.push("/");
-      router.replace("/");
-    })
-    .catch((error) => {
-      loading.value = false;
-      console.error("登录请求失败，完整错误：", error);
-      const errMsg =
-        error.response?.data?.message ||
-        error.message ||
-        "登录请求失败，请稍后再试";
-      ElMessage.error(errMsg);
-    });
+// ========== 真实接口方式（后端就绪后取消注释，并注释掉上面的模拟代码）==========
+// try {
+//   const response = await request.put("/user", {
+//     account: loginForm.account,
+//     password: loginForm.password,
+//   });
+//
+//   if (response && response.token) {
+//     ElMessage.success("登录成功！即将跳转...");
+//     user.setUserInfo({
+//       account: response.account,
+//       token: response.token,
+//       updateTime: response.updateTime,
+//     });
+//     router.replace("/");
+//   } else {
+//     ElMessage.error(response.msg || "登录失败");
+//   }
+// } catch (error: any) {
+//   const errMsg = error.response?.data?.msg || error.message || "登录请求失败";
+//   ElMessage.error(errMsg);
+// } finally {
+//   loading.value = false;
+// }
+
+
+// await request
+//   .put("/user", {
+//     account: loginForm.account,
+//     password: loginForm.password,
+//   }).then((response) => {
+//     if(response.code !== 200) {
+//       loading.value = false;
+//       ElMessage.error(response.msg);
+//       return;
+//     }
+//     ElMessage.success("登录成功！即将跳转大屏...");
+//
+//     user.setUserInfo(response.data);
+//     localStorage.setItem("token", response.data.token + String(response.data.updateToken));
+//
+//     router.push("/");
+//     router.replace("/");
+//   })
+//   .catch((error) => {
+//     loading.value = false;
+//     console.error("登录请求失败，完整错误：", error);
+//     const errMsg =
+//       error.response?.data?.message ||
+//       error.message ||
+//       "登录请求失败，请稍后再试";
+//     ElMessage.error(errMsg);
+//   });
 };
 
 </script>

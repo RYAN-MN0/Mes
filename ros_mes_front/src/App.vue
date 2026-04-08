@@ -28,7 +28,7 @@ html,body{
 }
 
 /* 全局容器：锁死视口高度 */
-.dashboard-container {
+/* .dashboard-container {
   height: 100vh;
   width: 100vw;
   background-color: #f0f2f5;
@@ -60,7 +60,7 @@ html,body{
   display: flex;
   align-items: center;
   transition: color 0.3s;
-}
+} */
 
 
 </style>
