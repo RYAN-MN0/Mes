@@ -1,15 +1,20 @@
 <!-- eslint-disable -->
 <template>
-  <div class="aside-container">
-    <div class="aside-header">
-      <h2 class="aside-title">MES核心控制台</h2>
+  <div class="aside-container" :class="{ 'is-collapsed': layoutStore.fold }">
+    <!-- Logo 区域（与 Mes.html 完全一致） -->
+    <div class="logo">
+      <span v-if="!layoutStore.fold">MES 核心控制台</span>
+      <span v-else>MES</span>
     </div>
+
     <el-menu
         :default-active="activeMenu"
         class="el-menu-vertical-demo"
+        :collapse="layoutStore.fold"
+        :collapse-transition="false"
         @select="handleMenuSelect"
         background-color="#2b3243"
-        active-text-color="#ffd04b"
+        active-text-color="#409eff"
         text-color="#fff"
     >
       <el-menu-item index="/HardWorkPage">
@@ -20,16 +25,13 @@
         <el-icon><document /></el-icon>
         <span>模块管理</span>
       </el-menu-item>
-      <el-menu-item index="/FineTuningPage">
-        <el-icon><setting /></el-icon>
-        <span>微调模块</span>
-      </el-menu-item>
     </el-menu>
-    <div class="aside-footer">
-      <!-- 自定义长按急停按钮 -->
-      <div
-          class="emergency-stop-wrapper"
-          :class="{ 'long-pressing': isPressing }"
+
+    <!-- 底部急停按钮（样式与 Mes.html 完全一致） -->
+    <div class="sidebar-bottom">
+      <el-button
+          class="e-stop-btn"
+          :class="{ 'pressing': isPressing, 'is-collapsed': layoutStore.fold }"
           @mousedown="startLongPress"
           @mouseup="cancelLongPress"
           @mouseleave="cancelLongPress"
@@ -37,13 +39,13 @@
           @touchend="cancelLongPress"
           @touchcancel="cancelLongPress"
       >
-        <div class="progress-bar" :class="{ 'active': isPressing }"></div>
-        <span class="btn-text">长按两秒急停</span>
-      </div>
+        <span v-if="!layoutStore.fold">长按两秒急停</span>
+        <span v-else style="font-size: 14px; letter-spacing: 0;">急停</span>
+      </el-button>
     </div>
   </div>
 
-  <!-- 急停遮罩层 -->
+  <!-- 急停遮罩层（保持不变） -->
   <div v-if="isEmergencyActive" class="emergency-overlay">
     <div class="emergency-content">
       <h1 style="color: white;">SYSTEM EMERGENCY STOP</h1>
@@ -57,50 +59,42 @@
 import {
   Document,
   Menu as IconMenu,
-  Setting,
 } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { computed, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
+import { useLayoutSettingStore } from '@/stores/layoutSetting';
 
 const router = useRouter();
 const route = useRoute();
+const layoutStore = useLayoutSettingStore();
 
 const activeMenu = computed(() => route.path);
 const handleMenuSelect = (index) => {
   router.push(index);
 };
 
-// ========== 急停长按逻辑 ==========
-const isPressing = ref(false);         // 是否正在长按（用于触发进度条动画）
-const isEmergencyActive = ref(false);  // 急停状态
-let pressTimer = null;                 // 长按定时器
-const LONG_PRESS_DURATION = 2000;      // 2秒
+// ========== 急停长按逻辑（完全保持不变） ==========
+const isPressing = ref(false);
+const isEmergencyActive = ref(false);
+let pressTimer = null;
+const LONG_PRESS_DURATION = 2000;
 
-// 开始长按
 const startLongPress = (event) => {
-  if (isEmergencyActive.value) return; // 急停中不允许再次触发
-
-  // 阻止默认事件（避免移动端页面滚动）
+  if (isEmergencyActive.value) return;
   event.preventDefault();
   if (pressTimer) clearTimeout(pressTimer);
-  
-  // 标记正在长按，CSS 进度条开始过渡动画（通过 transition 实现平滑填充）
   isPressing.value = true;
-  
-  // 设置长按定时器，2秒后触发急停
   pressTimer = setTimeout(() => {
     if (isPressing.value) {
       triggerEmergency();
     }
-    // 清理状态
     isPressing.value = false;
     pressTimer = null;
   }, LONG_PRESS_DURATION);
 };
 
-// 取消长按（提前松开）
 const cancelLongPress = () => {
   if (pressTimer) {
     clearTimeout(pressTimer);
@@ -109,37 +103,19 @@ const cancelLongPress = () => {
   isPressing.value = false;
 };
 
-// 触发急停
 const triggerEmergency = async () => {
   console.log('[模拟] 急停指令已触发');
   ElMessage.warning('急停指令已触发，所有机械臂停止运动');
   isEmergencyActive.value = true;
-
-  // 重置长按状态，避免进度条卡在100%
   cancelLongPress();
-
-  // 5秒后自动关闭遮罩（符合文档“画面变红5秒”）
   setTimeout(() => {
     if (isEmergencyActive.value) {
       isEmergencyActive.value = false;
       ElMessage.info('系统已恢复，请谨慎操作');
     }
   }, 5000);
-
-  // 真实接口（后端就绪后取消注释）
-  /*
-  try {
-    await request.post('/stop', { status: 0 });
-    console.log('急停指令已发送至ROS');
-    ElMessage.success('急停指令已执行');
-  } catch (err) {
-    console.error('急停接口调用失败', err);
-    ElMessage.error('急停指令发送失败');
-  }
-  */
 };
 
-// 解除急停（仅调试用）
 const resetEmergency = () => {
   isEmergencyActive.value = false;
   ElMessage.info('急停已解除');
@@ -147,105 +123,73 @@ const resetEmergency = () => {
 </script>
 
 <style scoped>
+/* 侧边栏容器：宽度由父组件控制，这里设置 100% 撑满 */
 .aside-container {
   height: 100%;
   width: 100%;
+  background-color: #2b3243;
   display: flex;
   flex-direction: column;
-  background-color: #2b3243;
-  margin: 0;
-  padding: 0;
+  transition: width 0.3s ease;
+  overflow-x: hidden;
 }
 
-.aside-header {
-  padding: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.aside-title {
-  color: #fff;
-  font-size: 18px;
-  font-weight: bold;
-  margin: 0;
-  text-align: center;
-}
-
-.el-menu-vertical-demo {
-  flex: 1;
-  height: 100%;
-  border-right: none;
-  border-left: none;
-}
-
-.aside-footer {
-  padding: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* 自定义长按急停按钮样式 */
-.emergency-stop-wrapper {
-  position: relative;
-  width: 100%;
+/* Logo 样式（与 Mes.html 完全一致） */
+.logo {
   height: 50px;
-  background-color: #f56c6c;
-  border-radius: 4px;
-  cursor: pointer;
-  overflow: hidden;
-  user-select: none;
-  transition: transform 0.08s linear; /* 让缩放变化更跟手 */
-}
-
-/* 按下时的缩放效果 */
-.emergency-stop-wrapper:active,
-.emergency-stop-wrapper.long-pressing {
-  transform: scale(0.9);
-  transition: transform 0.1s ease;
-}
-
-/* 进度条 - 默认宽度 0，通过 active class 触发过渡动画到 100% */
-.progress-bar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  background-color: #880000;
-  width: 0%;
-  transition: width 0s linear; /* 默认无过渡，避免瞬间变化 */
-  pointer-events: none;
-}
-
-/* 长按激活时，进度条宽度过渡到 100%，时长等于长按时间 */
-.progress-bar.active {
-  width: 100%;
-  transition: width 2s linear; /* 2秒内从0%平滑到100% */
-}
-
-.btn-text {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  color: white;
+  line-height: 50px;
+  text-align: center;
+  color: #fff;
   font-size: 16px;
   font-weight: bold;
+  border-bottom: 1px solid #1f2430;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* 菜单样式：边框、背景继承自 el-menu 属性 */
+.el-menu-vertical-demo {
+  flex: 1;
+  border-right: none;
+  background-color: #2b3243;
+}
+
+/* 底部容器（与 Mes.html 一致） */
+.sidebar-bottom {
+  padding: 8px;
+}
+
+/* 急停按钮样式（完全复制 Mes.html） */
+.e-stop-btn {
+  width: 100%;
+  height: 45px;
+  font-size: 15px;
+  font-weight: bold;
   letter-spacing: 2px;
-  transition: color 0.3s ease;
-}
-
-.emergency-stop-wrapper:hover .btn-text {
-  color: #4f9eff;
-}
-
-/* 消除el-aside的默认样式影响 */
-:deep(.el-aside) {
+  border: none !important;
+  color: white;
+  background: linear-gradient(90deg, #8b0000 50%, #f56c6c 50%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  transition: background-position 0s, transform 0.2s ease;
   padding: 0;
-  margin: 0;
+  border-radius: 4px;
 }
 
-/* 急停遮罩层样式 */
+.e-stop-btn.is-collapsed {
+  border-radius: 4px;
+}
+
+.e-stop-btn.pressing {
+  transform: scale(0.95);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
+  background-position: 0 0;
+  transition: background-position 2s linear, transform 0.2s ease;
+}
+
+/* 折叠时菜单项文字隐藏（Element Plus 自动处理，无需额外代码） */
+
+/* 急停遮罩层样式（原样保留） */
 .emergency-overlay {
   position: fixed;
   top: 0;

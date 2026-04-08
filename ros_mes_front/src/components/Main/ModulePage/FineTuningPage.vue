@@ -16,15 +16,7 @@
       </div>
     </div>
 
-    <!-- ========== 1. 当前操作信息展示 ========== -->
-    <el-alert
-        title="当前操作上下文"
-        :description="`模块编号: ${moduleId} | 选中的机械臂: ${currentDeviceIdHex}`"
-        type="info"
-        show-icon
-        :closable="false"
-        style="margin-bottom: 20px;"
-    />
+
 
     <!-- ========== 2. 三个机械臂的微调面板 ========== -->
     <div class="arm-list">
@@ -35,47 +27,57 @@
           shadow="hover"
           class="arm-card"
       >
-        <el-form label-width="100px">
+        <el-form label-width="140px" >
           <!-- 旋转轴 -->
-          <el-form-item label="旋转轴调整值(°)">
+          <el-form-item label="底座旋转调整值" >
             <el-input-number
                 v-model="arm.adjust.rotate"
                 :min="-360" :max="360"
                 placeholder="顺时针为正"
+                @change="sendSingleAdjust(arm)"
             />
             <span class="current-value">当前实际值: {{ arm.current.rotate }}°</span>
           </el-form-item>
 
           <!-- 摆动轴 -->
-          <el-form-item label="摆动轴调整值(°)">
+          <el-form-item label="摆动调整值">
             <el-input-number
                 v-model="arm.adjust.swing"
                 :min="-90" :max="90"
+                @change="sendSingleAdjust(arm)"
             />
             <span class="current-value">当前实际值: {{ arm.current.swing }}°</span>
           </el-form-item>
 
           <!-- 伸缩杆 -->
-          <el-form-item label="伸缩杆调整值(cm)">
+          <el-form-item label="伸缩杆调整值">
             <el-input-number
                 v-model="arm.adjust.telescope"
                 :min="-20" :max="20"
                 :step="0.5"
+                @change="sendSingleAdjust(arm)"
             />
             <span class="current-value">当前实际值: {{ arm.current.telescope }}cm</span>
           </el-form-item>
 
           <!-- 单个机械臂下发按钮 -->
-          <el-form-item>
-            <el-button type="primary" @click="sendSingleAdjust(arm)">下发微调</el-button>
-          </el-form-item>
+<!--          <el-form-item>-->
+<!--            <el-button type="primary" @click="sendSingleAdjust(arm)">下发微调</el-button>-->
+<!--          </el-form-item>-->
         </el-form>
+
+        <!-- 压力传感器信息 -->
+        <div class="pressure-sensor">
+          <span class="pressure-label">压力传感器：</span>
+          <span class="pressure-value">-- (等待接入)</span>
+        </div>
+
       </el-card>
     </div>
 
     <!-- ========== 3. 批量操作栏 ========== -->
     <div class="batch-bar">
-      <el-button type="success" @click="sendBatchAdjust">批量下发所有机械臂</el-button>
+<!--      <el-button type="success" @click="sendBatchAdjust">批量下发所有机械臂</el-button>-->
       <el-button @click="resetAllAdjust">重置所有调整值</el-button>
     </div>
   </div>
@@ -171,21 +173,21 @@ const sendSingleAdjust = async (arm: any) => {
 
 // ========== 4. 批量微调 ==========
 // 遍历所有机械臂，对每个有非零调整值的机械臂调用 sendSingleAdjust
-const sendBatchAdjust = async () => {
-  const tasks = armList.filter(arm =>
-      arm.adjust.rotate !== 0 || arm.adjust.swing !== 0 || arm.adjust.telescope !== 0
-  );
+// const sendBatchAdjust = async () => {
+//   const tasks = armList.filter(arm =>
+//       arm.adjust.rotate !== 0 || arm.adjust.swing !== 0 || arm.adjust.telescope !== 0
+//   );
 
-  if (tasks.length === 0) {
-    ElMessage.warning('没有待下发的调整值');
-    return;
-  }
+//   if (tasks.length === 0) {
+//     ElMessage.warning('没有待下发的调整值');
+//     return;
+//   }
 
-  // 并行发送所有请求
-  const promises = tasks.map(arm => sendSingleAdjust(arm));
-  await Promise.all(promises);
-  ElMessage.success('批量微调指令已全部发送');
-};
+//   // 并行发送所有请求
+//   const promises = tasks.map(arm => sendSingleAdjust(arm));
+//   await Promise.all(promises);
+//   ElMessage.success('批量微调指令已全部发送');
+// };
 
 // ========== 5. 辅助功能 ==========
 const resetAllAdjust = () => {
@@ -284,6 +286,26 @@ onMounted(() => {
   display: flex;
   gap: 16px;
   justify-content: center;
+}
+
+/* 压力传感器信息样式 */
+.pressure-sensor {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  color: #606266;
+}
+
+.pressure-label {
+  color: #909399;
+}
+
+.pressure-value {
+  color: #c0c4cc;
+  font-style: italic;
 }
 .el-form-item {
   margin-bottom: 18px;

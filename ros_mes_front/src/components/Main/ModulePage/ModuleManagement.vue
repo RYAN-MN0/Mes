@@ -3,39 +3,30 @@
     <div class="outer-table">
       <div class="title">模块管理与姿态调度</div>
 
-      <div class="coordinate-inputs">
-        <div class="coordinate-input-container">
-          <div class="input-group">
-            <label>X坐标 (1-15)</label>
-            <el-input-number v-model="xCoord" :min="1" :max="15" />
-          </div>
-          <div class="input-group">
-            <label>Y坐标 (1-15)</label>
-            <el-input-number v-model="yCoord" :min="1" :max="15" />
-          </div>
-          <div class="input-group">
-            <label>目标位置 (X,Y,Z)</label>
-            <el-input v-model="positionX" placeholder="X" style="width:70px" />
-            <el-input v-model="positionY" placeholder="Y" style="width:70px" />
-            <el-input v-model="positionZ" placeholder="Z" style="width:70px" />
-          </div>
-          <div class="input-group">
+      <!-- 操作栏：显示选中模块 + 设备选择 + 功能按钮 -->
+      <div class="action-bar">
+        <div class="module-info">
+          <span class="info-label">当前选中模块：</span>
+          <span class="info-value">({{ selectedCell.x }}, {{ selectedCell.y }})</span>
+          <span class="info-label" style="margin-left: 20px;">模块编号：</span>
+          <span class="info-value">{{ currentModuleId }}</span>
+        </div>
+        <div class="action-buttons">
+          <div class="input-group device-select">
             <label>设备编号</label>
-            <el-select v-model="deviceId" placeholder="选择机械臂">
+            <el-select v-model="deviceId" placeholder="选择机械臂" style="width: 140px;">
               <el-option label="当前坐标设备 (0)" :value="0" />
               <el-option label="机械臂1 (0x20)" :value="0x20" />
               <el-option label="机械臂2 (0x40)" :value="0x40" />
               <el-option label="机械臂3 (0x60)" :value="0x60" />
             </el-select>
           </div>
-          <el-button type="primary" @click="handleLockAndSend">锁定并下发</el-button>
-        </div>
-        <div class="system-target">
-          <span>当前选中模块: ({{ selectedCell.x }}, {{ selectedCell.y }})</span>
-          <span style="margin-left: 20px;">模块编号: {{ currentModuleId }}</span>
+          <el-button type="primary" @click="openTargetDialog">设定目标位置</el-button>
+          <el-button type="success" @click="handleFineTuning">姿态微调</el-button>
         </div>
       </div>
 
+      <!-- 8x8 模块矩阵 -->
       <div class="matrix-container">
         <div class="matrix">
           <div v-for="(row, yIndex) in matrix" :key="yIndex" class="matrix-row">
@@ -43,7 +34,7 @@
                 v-for="cell in row"
                 :key="`${cell.x}-${cell.y}`"
                 class="matrix-cell"
-                :class="{ 'selected': selectedCell.x === cell.x && selectedCell.y === cell.y }"
+                :class="{ selected: selectedCell.x === cell.x && selectedCell.y === cell.y }"
                 @click="handleCellClick(cell)"
             >
               ({{ cell.x }},{{ cell.y }})
@@ -52,6 +43,57 @@
         </div>
       </div>
     </div>
+
+    <!-- 目标位置设定弹窗 -->
+    <el-dialog
+        v-model="dialogVisible"
+        title="设定目标位置"
+        width="400px"
+        :close-on-click-modal="false"
+        :close-on-press-escape="!loading"
+        @close="handleDialogClose"
+    >
+      <el-form :model="targetForm" label-width="80px">
+        <el-form-item label="X 坐标" required>
+          <el-input-number
+              v-model="targetForm.x"
+              :min="-1000"
+              :max="1000"
+              :step="10"
+              controls-position="right"
+              style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="Y 坐标" required>
+          <el-input-number
+              v-model="targetForm.y"
+              :min="-1000"
+              :max="1000"
+              :step="10"
+              controls-position="right"
+              style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="Z 坐标" required>
+          <el-input-number
+              v-model="targetForm.z"
+              :min="-1000"
+              :max="1000"
+              :step="10"
+              controls-position="right"
+              style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false" :disabled="loading">取消</el-button>
+          <el-button type="primary" @click="submitTargetMove" :loading="loading">
+            {{ loading ? '正在移动中...' : '确定' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -60,18 +102,27 @@ import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import { useRouter } from 'vue-router';
+
 const router = useRouter();
 
+// 坐标与设备选择
 const xCoord = ref(1);
 const yCoord = ref(1);
-const positionX = ref('0');
-const positionY = ref('0');
-const positionZ = ref('0');
-const deviceId = ref(0);
+const deviceId = ref(0);          // 0: 当前坐标设备, 0x20, 0x40, 0x60
 
+// 矩阵数据 (8x8)
 const matrixSize = 8;
 const matrix = ref<any[]>([]);
 const selectedCell = ref({ x: 1, y: 1 });
+
+// 目标位置弹窗相关状态
+const dialogVisible = ref(false);
+const loading = ref(false);
+const targetForm = ref({
+  x: 0,
+  y: 0,
+  z: 0,
+});
 
 // 初始化矩阵
 for (let y = 1; y <= matrixSize; y++) {
@@ -91,53 +142,87 @@ const xyToModuleId = (x: number, y: number): number => {
 
 const currentModuleId = computed(() => xyToModuleId(selectedCell.value.x, selectedCell.value.y));
 
+// 点击矩阵格子
 const handleCellClick = (cell: any) => {
   selectedCell.value = cell;
-  // 可选：同步坐标输入框
+  // 同步坐标输入框（供其他逻辑使用）
   xCoord.value = cell.x;
   yCoord.value = cell.y;
 };
 
-const handleLockAndSend = async () => {
-  const module_id = currentModuleId.value;
-  const position = [Number(positionX.value), Number(positionY.value), Number(positionZ.value)];
+// 打开目标位置弹窗，重置表单
+const openTargetDialog = () => {
+  targetForm.value = { x: 0, y: 0, z: 0 };
+  dialogVisible.value = true;
+};
 
-  if (position.some(isNaN)) {
-    ElMessage.error('目标位置必须为数字');
+// 关闭弹窗时的清理
+const handleDialogClose = () => {
+  if (!loading.value) {
+    dialogVisible.value = false;
+  }
+};
+
+// 提交目标位置：调用后端接口，等待ROS到达后关闭弹窗
+const submitTargetMove = async () => {
+  const { x, y, z } = targetForm.value;
+  // 校验坐标是否均为有效数字（InputNumber 已保证是数字，但做兜底）
+  if (isNaN(x) || isNaN(y) || isNaN(z)) {
+    ElMessage.error('请填写有效的 X、Y、Z 坐标');
     return;
   }
 
-  console.log('下发参数:', { module_id, device_id: deviceId.value, position });
-      await router.push({
-        path: '/FineTuningPage',
-        query: {
-          module_id: module_id.toString(),
-          device_id: deviceId.value.toString()
-        }
-      });
+  const module_id = currentModuleId.value;
+  const position = [x, y, z];
 
-  // 真实接口
-  // try {
-  //   const res = await request.put('/module/put', {
-  //     module_id,
-  //     device_id: deviceId.value,
-  //     position
-  //   });
-  //   if (res && res.code === 200) {
-  //     ElMessage.success('目标下发成功，即将跳转至微调页面');
-  //     await router.push({
-  //       path: '/FineTuningPage',
-  //       query: {
-  //         module_id: module_id.toString(),
-  //         device_id: deviceId.value.toString()
-  //       }
-  //     });
-  //   } else {
-  //     ElMessage.error(res?.msg || '下发失败');
-  //   }
-  // } catch (err: any) {
-  //   ElMessage.error(err?.message || '请求失败');
-  // }
+  // 校验设备编号（若需限制具体机械臂可在此提示，但接口允许0代表当前坐标设备）
+  if (deviceId.value === undefined || deviceId.value === null) {
+    ElMessage.error('请选择有效的机械臂编号');
+    return;
+  }
+
+  console.log('下发目标位置参数:', { module_id, device_id: deviceId.value, position });
+
+  loading.value = true;
+  try {
+    // 调用后端目标下发接口，后端会等待 ROS 执行完毕并返回结果
+    const res = await request.put('/module/put', {
+      module_id,
+      device_id: deviceId.value,
+      position,
+    });
+
+    if (res && res.code === 200) {
+      ElMessage.success(`模块 ${module_id} 已成功到达目标位置 (${x}, ${y}, ${z})`);
+      // 成功到达后关闭弹窗
+      dialogVisible.value = false;
+    } else {
+      ElMessage.error(res?.msg || '目标位置下发失败，请重试');
+    }
+  } catch (err: any) {
+    console.error('目标位置下发异常:', err);
+    ElMessage.error(err?.message || '请求失败，请检查后端服务');
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 姿态微调：跳转至微调页面，进行精细调节
+const handleFineTuning = async () => {
+  const module_id = currentModuleId.value;
+  // 建议选择具体的机械臂进行微调，避免使用“当前坐标设备(0)”
+  if (deviceId.value === 0) {
+    ElMessage.warning('微调操作需要选择具体的机械臂（0x20 / 0x40 / 0x60），请重新选择');
+    return;
+  }
+  console.log('跳转微调页面，参数:', { module_id, device_id: deviceId.value });
+  await router.push({
+    path: '/FineTuningPage',
+    query: {
+      module_id: module_id.toString(),
+      device_id: deviceId.value.toString()
+    }
+  });
 };
 </script>
 
@@ -155,41 +240,49 @@ const handleLockAndSend = async () => {
   color: #333;
   margin-bottom: 10px;
 }
-.coordinate-inputs {
+/* 新的操作栏样式 */
+.action-bar {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 5px;
-  margin-bottom: 15px;
+  justify-content: space-between;
+  align-items: center;
   background-color: #f5f7fa;
+  padding: 12px 20px;
   border-radius: 8px;
-  border-left: 4px solid #409eff;
-  margin-top: 20px;
-}
-.coordinate-input-container {
-  display: flex;
-  gap: 20px;
-  padding-left: 15px;
-  margin-top: 15px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
-  align-items: center;
+  gap: 15px;
 }
-.input-group {
+.module-info {
+  font-size: 14px;
+  color: #333;
+}
+.info-label {
+  font-weight: 500;
+  color: #606266;
+}
+.info-value {
+  font-weight: bold;
+  color: #409eff;
+  margin-right: 8px;
+}
+.action-buttons {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.device-select {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.system-target {
-  margin-bottom: 15px;
-  font-size: 14px;
-  color: #409eff;
-  padding-left: 15px;
+.device-select label {
+  font-weight: 500;
+  color: #606266;
 }
 .matrix-container {
   display: flex;
   justify-content: center;
-  padding-left: 15px;
-  margin-top: 20px;
   overflow-x: auto;
 }
 .matrix {

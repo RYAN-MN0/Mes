@@ -16,7 +16,7 @@
       </el-container> -->
 
 
-       <el-aside width="200px" height="100%"><Aside></Aside></el-aside>
+       <el-aside :width="layoutStore.fold ? '64px' : '220px'" style="transition: width 0.3s ease;"><Aside></Aside></el-aside>
 
       <el-container>
         <el-header><Head></Head></el-header>
@@ -32,8 +32,10 @@ import Aside from '../Main/AsidePage.vue';
 import FineTuningPage from '../Main/ModulePage/FineTuningPage.vue';
 import HardWorkPage from '../Main/Hardwork/HardWorkPage.vue';
 import Head from  '../Head/head.vue'
+import { useLayoutSettingStore } from '@/stores/layoutSetting';
 
 
+const layoutStore = useLayoutSettingStore();
 </script>
 
 <style>
