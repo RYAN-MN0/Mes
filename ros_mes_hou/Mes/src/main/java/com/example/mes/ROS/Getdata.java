@@ -1,26 +1,32 @@
 package com.example.mes.ROS;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.example.mes.pojo.FineTuning;
+import com.example.mes.pojo.FineTuningHistory;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import com.alibaba.fastjson.JSONObject;
 import java.net.URI;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
 
 public class Getdata extends WebSocketClient {
 
-    // 改成你的 ROS 虚拟机 IP
     private static final String ROS_URL = "ws://192.168.148.90:8765";
     private static Getdata clientInstance;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+    // ===================== 同步返回核心 =====================
+    private ConcurrentHashMap<String, CompletableFuture<JSONObject>> futureMap = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, List<JSONObject>> moduleMsgCache = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, CompletableFuture<FineTuningHistory>> moduleFutureMap = new ConcurrentHashMap<>();
 
     public Getdata(URI serverUri) {
         super(serverUri);
         clientInstance = this;
     }
 
-    // 获取单例（方便全局发送消息）
     public static Getdata getClient() {
         return clientInstance;
     }
@@ -28,34 +34,6 @@ public class Getdata extends WebSocketClient {
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         System.out.println("✅ 已连接 ROS");
-    }
-
-    // 接收 ROS 消息（含 header）
-    @Override
-    public void onMessage(String message) {
-        System.out.println("\n📥 收到ROS消息：" + message);
-//        try {
-//            JSONObject data = JSONObject.parseObject(message);
-//            String name = data.getString("name");
-//            int age = data.getInteger("age");
-//            double height = data.getDouble("height");
-//            boolean isStudent = data.getBoolean("is_student");
-//
-//            JSONObject header = data.getJSONObject("header");
-//            String frameId = header.getString("frame_id");
-//            JSONObject stamp = header.getJSONObject("stamp");
-//            long secs = stamp.getLong("secs");
-//            long nsecs = stamp.getLong("nsecs");
-//
-//            System.out.println("姓名：" + name);
-//            System.out.println("年龄：" + age);
-//            System.out.println("身高：" + height);
-//            System.out.println("是否学生：" + isStudent);
-//            System.out.println("frame_id：" + frameId);
-//            System.out.println("时间戳：" + secs + "." + nsecs);
-//        } catch (Exception e) {
-//            System.out.println("ROS回复：" + message);
-//        }
     }
 
     @Override
@@ -70,16 +48,116 @@ public class Getdata extends WebSocketClient {
         retry();
     }
 
-    // 发送消息给 ROS（核心方法！）
-    public void sendToRos(String msg) {
-        if (isOpen()) {
-            send(msg);
-            System.out.println("✅ 已发送给ROS：" + msg);
-        } else {
-            System.out.println("❌ 未连接，发送失败");
+    @Override
+    public void onMessage(String message) {
+        System.out.println("\n📥 收到ROS消息：" + message);
+        try {
+            JSONObject rosJson = JSON.parseObject(message);
+            String msgId = rosJson.getString("msgId");
+
+            // 1. 无msgId的消息直接丢弃
+            if (msgId == null) return;
+
+            // 2. 判断是否是module相关消息（msgId包含"module"字符串）
+            if (msgId.contains("module")) {
+                // 2.1 把当前消息存入对应msgId的缓存列表
+                moduleMsgCache.computeIfAbsent(msgId, k -> new ArrayList<>()).add(rosJson);
+                List<JSONObject> cachedList = moduleMsgCache.get(msgId);
+
+                // 2.2 检查是否攒够3条消息
+                if (cachedList.size() >= 3) {
+                    // 2.3 3条消息攒齐，封装成FineTuningHistory
+                    FineTuningHistory history = buildHistoryFromMsgList(cachedList);
+
+                    // 2.4 从等待器Map中取出对应future，唤醒线程
+                    CompletableFuture<FineTuningHistory> future = moduleFutureMap.get(msgId);
+                    if (future != null) {
+                        future.complete(history);
+                        moduleFutureMap.remove(msgId); // 用完删除
+                    }
+
+                    // 2.5 清理缓存
+                    moduleMsgCache.remove(msgId);
+                }
+            }
+            // 3. 普通消息：直接走原有逻辑，唤醒线程
+            else if (futureMap.containsKey(msgId)) {
+                CompletableFuture<JSONObject> future = futureMap.get(msgId);
+                future.complete(rosJson);
+                futureMap.remove(msgId);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
+    private FineTuningHistory buildHistoryFromMsgList(List<JSONObject> msgList) {
+        FineTuningHistory history = new FineTuningHistory();
 
+        // 第1条：基础信息（moduleId、deviceId、position）
+        JSONObject msg1 = msgList.get(0);
+        history.setId(msg1.getInteger("id"));
+        history.setModuleId(msg1.getString("moduleId"));
+
+        // 第2-3条：传感器数据，合并成List
+        List<Integer> sensorList = new ArrayList<>();
+        for (int i = 1; i < msgList.size(); i++) {
+            JSONObject msg = msgList.get(i);
+            sensorList.add(msg.getInteger("sensorNum"));
+        }
+        history.setSensorNum(sensorList);
+
+        return history;
+    }
+    // 发送指令，并等待ROS返回
+    public JSONObject sendAndWait(JSONObject msg, long timeout, TimeUnit unit) throws Exception {
+        if (!isOpen()) {
+            throw new Exception("WebSocket未连接");
+        }
+
+        String msgId = System.currentTimeMillis() + "";
+        msg.put("msgId", msgId);
+        CompletableFuture<JSONObject> future = new CompletableFuture<>();
+        futureMap.put(msgId, future);
+
+        send(msg.toJSONString());
+        System.out.println("✅ 已发送：" + msg);
+
+        return future.get(timeout, unit);
+    }
+
+    public CompletableFuture<FineTuningHistory> sendModuleMsgAndWait(JSONObject msg, long timeout, TimeUnit unit) {
+        if (!isOpen()) {
+            throw new RuntimeException("WebSocket未连接");
+        }
+
+        String msgId = System.currentTimeMillis() + "_module"; // 确保msgId包含module
+        msg.put("msgId", msgId);
+
+        // 初始化缓存和等待器
+        moduleMsgCache.put(msgId, new ArrayList<>());
+        CompletableFuture<FineTuningHistory> future = new CompletableFuture<>();
+        moduleFutureMap.put(msgId, future);
+
+        // 发送消息
+        send(msg.toJSONString());
+        System.out.println("✅ 已发送module请求：" + msg);
+
+        // 设置超时，避免无限等待
+        future.completeOnTimeout(null, timeout, unit);
+        return future;
+    }
+
+
+    // ===================== 业务方法：安全急停 =====================
+    public JSONObject sendEmergencyStop() throws Exception {
+        JSONObject msg = new JSONObject();
+        msg.put("cmd", "STOP");
+        msg.put("status", 0);
+        return sendAndWait(msg, 3, TimeUnit.SECONDS);
+    }
+
+    // ===================== 重连 =====================
     private void retry() {
         executor.schedule(() -> {
             try {

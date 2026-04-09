@@ -10,7 +10,7 @@ import java.util.Date;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Hardwork {
+public class Hardware {
     private String id;
     private String deviceName;
     private Integer type;

@@ -1,46 +1,44 @@
 package com.example.mes.Controller;
 
-import com.example.mes.Service.GetHardworkInfo;
-import com.example.mes.pojo.Hardwork;
+import com.example.mes.Service.GetHardwareInfo;
+import com.example.mes.pojo.Hardware;
 import com.example.mes.pojo.Result;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
 
 @RestController
+@CrossOrigin(origins = "*")
 public class BaseInfoController {
 
     @Autowired
-    private GetHardworkInfo getHardworkInfo;
+    private GetHardwareInfo GetHardwareInfo;
 
     @GetMapping("/hardwork")
     public Result selectall(){
-        return Result.success(getHardworkInfo.selectall());
+        return Result.success(GetHardwareInfo.selectall());
     }
 
     @PutMapping("/hardwork")
     public Result addNewItem(String id, String deviceName, Integer type, String spec, Integer status) {
         Date createTime = new Date();
         Date updateTime = new Date();
-        Hardwork hardwork = new Hardwork(id, deviceName, type, spec, status, updateTime, createTime);
-        getHardworkInfo.addHardwork(hardwork);
-        return Result.success(getHardworkInfo.selectall());
+        Hardware hardware = new Hardware(id, deviceName, type, spec, status, updateTime, createTime);
+        GetHardwareInfo.addHardwork(hardware);
+        return Result.success(GetHardwareInfo.selectall());
     }
 
     @GetMapping("/hardwork/select")
-    public Result selectBySome(Hardwork hardwork){
-        System.out.println(hardwork);
-        hardwork.setId("%"+hardwork.getId()+"%");
-        return Result.success(getHardworkInfo.selectBysome(hardwork));
+    public Result selectBySome(Hardware hardware){
+        System.out.println(hardware);
+        hardware.setId("%"+ hardware.getId()+"%");
+        return Result.success(GetHardwareInfo.selectBysome(hardware));
     }
 
     @DeleteMapping("/hardwork")
     public Result deleteById(String id){
-        String msg = getHardworkInfo.deleteById(id);
+        String msg = GetHardwareInfo.deleteById(id);
         if(msg == "success"){
             return Result.success();
         }else{

@@ -2,19 +2,19 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.mes.mapper.HardworkMapper">
-    <select id="selectAll" resultType="com.example.mes.pojo.Hardwork">
-        select id,device_name,type,spec,status,update_time,create_time from hardwork
+<mapper namespace="com.example.mes.mapper.HardwareMapper">
+    <select id="selectAll" resultType="com.example.mes.pojo.Hardware">
+        select id,device_name,type,spec,status,update_time,create_time from hardware
     </select>
-        <delete id="deleteById" >
-            delete from hardwork where id = #{id}
-        </delete>
+    <delete id="deleteById" >
+        delete from hardware where id = #{id}
+    </delete>
     <insert id="add">
-        insert into hardwork values(#{id},#{deviceName},#{type},#{spec},#{status},#{updateTime},#{createTime})
+        insert into hardware values(#{id},#{deviceName},#{type},#{spec},#{status},#{updateTime},#{createTime})
     </insert>
 
-    <select id="selectBySome" resultType="com.example.mes.pojo.Hardwork">
-        select * from hardwork
+    <select id="selectBySome" resultType="com.example.mes.pojo.Hardware">
+        select * from hardware
         <where>
             <if test="id != null and id != ''" >
                 and (id like #{id} or device_name like #{id})
@@ -27,5 +27,4 @@
             </if>
         </where>
     </select>
-
 </mapper>
