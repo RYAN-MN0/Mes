@@ -22,32 +22,32 @@
     </el-form>
 
     <!-- 硬件列表表格 -->
-    <el-table :data="hardworks" border stripe style="width: 100%">
-      <el-table-column prop="id" label="硬件编号" width="150" />
-      <el-table-column prop="deviceName" label="硬件名称" width="150" />
-      <el-table-column prop="type" label="硬件类型" width="120">
-        <template #default="{ row }">
-          {{ row.type === 1 ? "机械臂" : "压力传感器" }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="spec" label="规格" width="150" />
-      <el-table-column prop="status" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'">
-            {{ row.status === 1 ? "正常" : "故障" }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="updateTime" label="最近使用时间" width="180" />
-      <el-table-column prop="createTime" label="创建时间" width="180" />
-      <el-table-column fixed="right" label="操作" width="120">
-        <template #default="{ row }">
-          <el-button link type="danger" size="small" @click="deleteRow(row)">
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+   <el-table :data="hardworks" border stripe style="width: 100%">
+        <el-table-column prop="id" label="硬件编号" width="150" align="center" />
+        <el-table-column prop="deviceName" label="硬件名称" width="150" align="center" />
+        <el-table-column prop="type" label="硬件类型" width="120" align="center">
+          <template #default="{ row }">
+            {{ row.type === 1 ? '机械臂' : '压力传感器' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="spec" label="规格" width="150" align="center" />
+        <el-table-column prop="status" label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'danger'">
+              {{ row.status === 1 ? '正常' : '故障' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updateTime" label="最近使用时间" width="180" align="center" />
+        <el-table-column prop="createTime" label="创建时间" width="180" align="center" />
+        <el-table-column fixed="right" label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button link type="danger" size="small" @click="deleteRow(row)">
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
     <!-- 新增硬件弹窗 -->
     <el-dialog v-model="addDialogVisible" title="新增硬件" width="500px">
@@ -314,5 +314,31 @@ onMounted(() => {
 }
 .container > :last-child {
   flex: 1;
+}
+
+
+/* 强制修正表格对齐问题 */
+:deep(.el-table th.el-table__cell) {
+  text-align: center !important;
+}
+
+:deep(.el-table td.el-table__cell) {
+  text-align: center !important;
+}
+
+/* 修复表头和内容边框对不齐的对齐补丁 */
+:deep(.el-table__header),
+:deep(.el-table__body),
+:deep(.el-table__footer) {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+/* 移除可能存在的默认内边距干扰 */
+:deep(.el-table .cell) {
+  padding: 0 !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 </style>

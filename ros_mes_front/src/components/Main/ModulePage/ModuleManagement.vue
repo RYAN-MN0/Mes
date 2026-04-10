@@ -4,7 +4,7 @@
       <div class="title">模块管理与姿态调度</div>
 
       <!-- 操作栏：显示选中模块 + 设备选择 + 功能按钮 -->
-      <div class="action-bar">
+      <!-- <div class="action-bar">
         <div class="module-info">
           <span class="info-label">当前选中模块：</span>
           <span class="info-value">({{ selectedCell.x }}, {{ selectedCell.y }})</span>
@@ -23,6 +23,22 @@
           </div>
           <el-button type="primary" @click="openTargetDialog">设定目标位置</el-button>
           <el-button type="success" @click="handleFineTuning">姿态微调</el-button>
+        </div>
+      </div> -->
+      <div class="action-bar-restored">
+        <div class="input-row">
+          <div class="input-group">
+            <span class="prefix">X 坐标 (前四位)</span>
+            <el-input v-model="inputX" class="binary-input" maxlength="4" @change="handleXChange" />
+          </div>
+          <div class="input-group">
+            <span class="prefix">Y 坐标 (后四位)</span>
+            <el-input v-model="inputY" class="binary-input" maxlength="4" @change="handleYChange" />
+          </div>
+          <el-button type="primary" class="lock-btn" @click="handleLockAndJump">锁定并下发</el-button>
+        </div>
+        <div class="hint-text">
+          系统锁定目标: X(十进制 <span class="highlight">{{ selectedCell.x }}</span>) - Y(十进制 <span class="highlight">{{ selectedCell.y }}</span>)
         </div>
       </div>
 
@@ -98,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import { useRouter } from 'vue-router';
@@ -142,13 +158,115 @@ const xyToModuleId = (x: number, y: number): number => {
 
 const currentModuleId = computed(() => xyToModuleId(selectedCell.value.x, selectedCell.value.y));
 
-// 点击矩阵格子
+
+// ========== 替换刚才的 computed，使用更稳定的输入监听逻辑 ==========
+// 1. 定义独立的输入框绑定值，不会再随便弹回去了
+const inputX = ref('0001');
+const inputY = ref('0001');
+
+// 2. 监听下方矩阵点击：一旦格子变化，更新上方输入框
+watch(selectedCell, (newVal) => {
+  inputX.value = newVal.x.toString(2).padStart(4, '0');
+  inputY.value = newVal.y.toString(2).padStart(4, '0');
+}, { deep: true, immediate: true });
+
+// 3. 监听 X 输入框的回车或失去焦点事件
+// const handleXChange = (val: string) => {
+//   const parsed = parseInt(val, 2);
+//   // 校验：必须是数字，且在 1~8 的合法范围内
+//   if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+//     selectedCell.value.x = parsed;
+//     xCoord.value = parsed;
+//     // 自动补齐为 4 位格式 (比如你只输入 10，自动变成 0010)
+//     inputX.value = parsed.toString(2).padStart(4, '0');
+//   } else {
+//     // 如果输入乱码或超出范围，弹窗提示，并恢复当前选中格子的值
+//     ElMessage.warning('请输入有效的四位二进制数 (例如: 0001 到 1000)');
+//     inputX.value = selectedCell.value.x.toString(2).padStart(4, '0');
+//   }
+// };
+
+// 4. 监听 Y 输入框的回车或失去焦点事件
+// const handleYChange = (val: string) => {
+//   const parsed = parseInt(val, 2);
+//   if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+//     selectedCell.value.y = parsed;
+//     yCoord.value = parsed;
+//     inputY.value = parsed.toString(2).padStart(4, '0');
+//   } else {
+//     ElMessage.warning('请输入有效的四位二进制数 (例如: 0001 到 1000)');
+//     inputY.value = selectedCell.value.y.toString(2).padStart(4, '0');
+//   }
+// };
+
+
+
+
+
+
+// 3. 监听 X 输入框的事件
+const handleXChange = (val: string) => {
+  const parsed = parseInt(val, 2);
+  if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+    // 【修复】不要用 selectedCell.value.x = parsed; 而是创建一个新对象
+    selectedCell.value = { x: parsed, y: selectedCell.value.y };
+    xCoord.value = parsed;
+    inputX.value = parsed.toString(2).padStart(4, '0');
+  } else {
+    ElMessage.warning('请输入有效的四位二进制数 (例如: 0001 到 1000)');
+    inputX.value = selectedCell.value.x.toString(2).padStart(4, '0');
+  }
+};
+
+// 4. 监听 Y 输入框的事件
+const handleYChange = (val: string) => {
+  const parsed = parseInt(val, 2);
+  if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+    // 【修复】创建一个新对象
+    selectedCell.value = { x: selectedCell.value.x, y: parsed };
+    yCoord.value = parsed;
+    inputY.value = parsed.toString(2).padStart(4, '0');
+  } else {
+    ElMessage.warning('请输入有效的四位二进制数 (例如: 0001 到 1000)');
+    inputY.value = selectedCell.value.y.toString(2).padStart(4, '0');
+  }
+};
+
+// 点击矩阵格子（【修复】赋值为一个新对象，防止后续操作污染矩阵原数据）
 const handleCellClick = (cell: any) => {
-  selectedCell.value = cell;
-  // 同步坐标输入框（供其他逻辑使用）
+  selectedCell.value = { x: cell.x, y: cell.y }; 
   xCoord.value = cell.x;
   yCoord.value = cell.y;
 };
+
+
+// 点击矩阵格子
+// const handleCellClick = (cell: any) => {
+//   selectedCell.value = cell;
+//   // 同步坐标输入框（供其他逻辑使用）
+//   xCoord.value = cell.x;
+//   yCoord.value = cell.y;
+// };
+
+// ========== 锁定并下发：跳转到微调页面 ==========
+const handleLockAndJump = () => {
+  const module_id = currentModuleId.value;
+  
+  if (module_id === undefined || module_id === null) {
+    ElMessage.warning('未能获取到有效的模块编号');
+    return;
+  }
+
+  // 携带计算好的 module_id 跳转到微调页面
+  router.push({
+    path: '/FineTuningPage',
+    query: {
+      module_id: module_id.toString()
+    }
+  });
+};
+
+
 
 // 打开目标位置弹窗，重置表单
 const openTargetDialog = () => {
@@ -224,6 +342,8 @@ const handleFineTuning = async () => {
     }
   });
 };
+
+
 </script>
 
 <style scoped>
@@ -318,5 +438,80 @@ const handleFineTuning = async () => {
   background-color: #409eff;
   color: #fff;
   font-weight: bold;
+}
+
+
+/* 新增的还原截图样式 */
+/* 新增的还原截图样式 (精修版) */
+.action-bar-restored {
+  background-color: #ffffff;
+  padding: 16px 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border-left: 4px solid #409eff;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05); /* 增加轻微阴影，更有质感 */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 内部元素居中 */
+  gap: 12px;
+  width: fit-content;  /* 拒绝拉伸，宽度由内容撑开 */
+  margin-left: auto;
+  margin-right: auto;  /* 整个面板整体居中 */
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+  height: 36px; /* 降低整体高度，更秀气 */
+}
+
+.prefix {
+  padding: 0 12px;
+  color: #606266;
+  font-size: 13px;
+  background-color: #f5f7fa;
+  border-right: 1px solid #dcdfe6;
+  line-height: 36px;
+  white-space: nowrap; /* 防止文字换行 */
+}
+
+.binary-input :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  width: 70px; /* 缩窄输入框，只需放4位数字 */
+  padding: 0;
+}
+
+/* 让二进制数字居中并使用等宽字体，更像极客面板 */
+.binary-input :deep(.el-input__inner) {
+  text-align: center;
+  font-family: monospace;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.lock-btn {
+  height: 36px;
+  padding: 0 20px;
+}
+
+.hint-text {
+  font-size: 13px;
+  color: #909399;
+}
+
+.hint-text .highlight {
+  color: #409eff;
+  font-weight: bold;
+  font-size: 14px;
 }
 </style>

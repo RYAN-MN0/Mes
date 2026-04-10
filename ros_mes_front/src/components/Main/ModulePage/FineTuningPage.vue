@@ -8,18 +8,18 @@
         </el-button>
         <span class="header-title">机械臂姿态微调与压力监控</span>
       </div>
-      <div class="header-right">
-        <el-button type="primary">ROS连接</el-button>
-        <el-button type="success">保存配置</el-button>
-        <el-button type="warning">重置参数</el-button>
-        <el-button type="info">历史记录</el-button>
-      </div>
     </div>
+    <div class="header-right">
+        <el-button type="primary" @click="handleRosConnect">ROS连接</el-button>
+        <el-button type="success" @click="handleSaveConfig">保存配置</el-button>
+        <el-button type="warning" @click="resetAllAdjust">重置参数</el-button>
+        <el-button type="info" @click="handleHistory">历史记录</el-button>
+      </div>
 
 
 
     <!-- ========== 2. 三个机械臂的微调面板 ========== -->
-    <div class="arm-list">
+    <!-- <div class="arm-list">
       <el-card
           v-for="arm in armList"
           :key="arm.id"
@@ -27,9 +27,9 @@
           shadow="hover"
           class="arm-card"
       >
-        <el-form label-width="140px" >
+        <el-form label-width="140px" > -->
           <!-- 旋转轴 -->
-          <el-form-item label="底座旋转调整值" >
+          <!-- <el-form-item label="底座旋转调整值" >
             <el-input-number
                 v-model="arm.adjust.rotate"
                 :min="-360" :max="360"
@@ -37,20 +37,20 @@
                 @change="sendSingleAdjust(arm)"
             />
             <span class="current-value">当前实际值: {{ arm.current.rotate }}°</span>
-          </el-form-item>
+          </el-form-item> -->
 
           <!-- 摆动轴 -->
-          <el-form-item label="摆动调整值">
+          <!-- <el-form-item label="摆动调整值">
             <el-input-number
                 v-model="arm.adjust.swing"
                 :min="-90" :max="90"
                 @change="sendSingleAdjust(arm)"
             />
             <span class="current-value">当前实际值: {{ arm.current.swing }}°</span>
-          </el-form-item>
+          </el-form-item> -->
 
           <!-- 伸缩杆 -->
-          <el-form-item label="伸缩杆调整值">
+          <!-- <el-form-item label="伸缩杆调整值">
             <el-input-number
                 v-model="arm.adjust.telescope"
                 :min="-20" :max="20"
@@ -58,30 +58,142 @@
                 @change="sendSingleAdjust(arm)"
             />
             <span class="current-value">当前实际值: {{ arm.current.telescope }}cm</span>
-          </el-form-item>
+          </el-form-item> -->
 
           <!-- 单个机械臂下发按钮 -->
 <!--          <el-form-item>-->
 <!--            <el-button type="primary" @click="sendSingleAdjust(arm)">下发微调</el-button>-->
 <!--          </el-form-item>-->
-        </el-form>
+        <!-- </el-form> -->
 
         <!-- 压力传感器信息 -->
-        <div class="pressure-sensor">
+        <!-- <div class="pressure-sensor">
           <span class="pressure-label">压力传感器：</span>
           <span class="pressure-value">-- (等待接入)</span>
         </div>
 
       </el-card>
+    </div> -->
+
+
+
+    <!-- ======机械臂的微调面板======== -->
+
+    <div class="arm-list">
+      <el-card
+          v-for="arm in armList"
+          :key="arm.id"
+          shadow="hover"
+          class="main-control-card"
+      >
+        <template #header>
+          <div class="card-header">
+            <span class="header-text">核心机械臂控制单元 - 设备 {{ arm.idHex }}</span>
+            <el-tag type="success" effect="dark" round size="small">运行中</el-tag>
+          </div>
+        </template>
+
+        <div class="control-grid">
+          <div class="control-item">
+            <div class="label-box">
+              <span class="label-title">底座旋转调整值</span>
+              <span class="real-time-tag">当前实际值: {{ arm.current.rotate }}°</span>
+            </div>
+            <div class="input-wrapper">
+              <el-input-number
+                  v-model="arm.adjust.rotate"
+                  :min="-360" :max="360"
+                  placeholder="顺时针为正"
+                  @change="sendSingleAdjust(arm)"
+              />
+             
+            </div>
+          </div>
+
+          <div class="control-item">
+            <div class="label-box">
+              <span class="label-title">摆动调整值</span>
+              <span class="real-time-tag">当前实际值: {{ arm.current.swing }}°</span>
+            </div>
+            <div class="input-wrapper">
+              <el-input-number
+                  v-model="arm.adjust.swing"
+                  :min="-90" :max="90"
+                  @change="sendSingleAdjust(arm)"
+              />
+             
+            </div>
+          </div>
+
+          <div class="control-item">
+            <div class="label-box">
+              <span class="label-title">伸缩杆调整值</span>
+              <span class="real-time-tag">当前实际值: {{ arm.current.telescope }}cm</span>
+            </div>
+            <div class="input-wrapper">
+              <el-input-number
+                  v-model="arm.adjust.telescope"
+                  :min="-20" :max="20"
+                  :step="0.5"
+                  @change="sendSingleAdjust(arm)"
+              />
+              
+            </div>
+          </div>
+        </div>
+
+        <div class="sensor-panel">
+          <div class="sensor-title">压力传感器实时反馈</div>
+          <div class="sensor-value-box">
+            <span class="status-dot pulse"></span>
+            <span class="value-text">等待数据接入...</span>
+          </div>
+        </div>
+
+      </el-card>
     </div>
+
 
     <!-- ========== 3. 批量操作栏 ========== -->
     <div class="batch-bar">
 <!--      <el-button type="success" @click="sendBatchAdjust">批量下发所有机械臂</el-button>-->
       <el-button @click="resetAllAdjust">重置所有调整值</el-button>
     </div>
-  </div>
-</template>
+
+
+    <el-dialog
+      v-model="initDialogVisible"
+      title="配置设备参数"
+      width="450px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="设备编号" required>
+          <el-select v-model="initConfig.deviceId" placeholder="请选择机械臂" style="width: 100%">
+            <!-- <el-option label="当前坐标设备 (0)" :value="0" /> -->
+            <el-option label="机械臂1 (0x20)" :value="0x20" />
+            <!-- <el-option label="机械臂2 (0x40)" :value="0x40" />
+            <el-option label="机械臂3 (0x60)" :value="0x60" /> -->
+          </el-select>
+        </el-form-item>
+        <el-form-item label="X 坐标" required>
+          <el-input-number v-model="initConfig.x" :step="10" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="Y 坐标" required>
+          <el-input-number v-model="initConfig.y" :step="10" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="Z 坐标" required>
+          <el-input-number v-model="initConfig.z" :step="10" controls-position="right" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button type="primary" @click="confirmInitConfig">确定并关闭</el-button>
+      </template>
+    </el-dialog>
+
+  </div> </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
@@ -90,6 +202,35 @@ import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 
 const router = useRouter();
+
+
+
+// ========== 新增：初始化强制弹窗逻辑 ==========
+const initDialogVisible = ref(true); // 默认 true，页面一进来就弹
+const initConfig = reactive({
+  // deviceId: null as number | null,
+  deviceId: 0x20,
+  x: 0,
+  y: 0,
+  z: 0
+});
+
+const confirmInitConfig = () => {
+  if (initConfig.deviceId === null) {
+    ElMessage.warning('必须选择一个设备编号才能继续');
+    return;
+  }
+  
+  // 将用户选中的设备ID赋值给微调页面原有的变量，让微调页面可以正常工作
+  currentDeviceId.value = initConfig.deviceId;
+  
+  // 在这里你可以直接调用后端接口下发 XYZ 坐标
+  console.log('初始位置已下发:', initConfig);
+  ElMessage.success('初始参数设置成功！');
+  
+  // 关闭弹窗
+  initDialogVisible.value = false;
+};
 
 // ========== 1. 路由参数获取 ==========
 const route = useRoute();
@@ -109,18 +250,18 @@ const armList = reactive([
     adjust: { rotate: 0, swing: 0, telescope: 0 },
     current: { rotate: 150, swing: 30, telescope: 25 },   // 模拟初始值
   },
-  {
-    id: 0x40,
-    idHex: '0x40',
-    adjust: { rotate: 0, swing: 0, telescope: 0 },
-    current: { rotate: 160, swing: 25, telescope: 24 },
-  },
-  {
-    id: 0x60,
-    idHex: '0x60',
-    adjust: { rotate: 0, swing: 0, telescope: 0 },
-    current: { rotate: 145, swing: 35, telescope: 26 },
-  },
+  // {
+  //   id: 0x40,
+  //   idHex: '0x40',
+  //   adjust: { rotate: 0, swing: 0, telescope: 0 },
+  //   current: { rotate: 160, swing: 25, telescope: 24 },
+  // },
+  // {
+  //   id: 0x60,
+  //   idHex: '0x60',
+  //   adjust: { rotate: 0, swing: 0, telescope: 0 },
+  //   current: { rotate: 145, swing: 35, telescope: 26 },
+  // },
 ]);
 
 // ========== 3. 单个机械臂微调（核心接口） ==========
@@ -189,6 +330,21 @@ const sendSingleAdjust = async (arm: any) => {
 //   ElMessage.success('批量微调指令已全部发送');
 // };
 
+// ========== 顶部功能按钮逻辑 ==========
+const handleRosConnect = () => {
+  ElMessage.success('已发送 ROS 重新连接请求...');
+};
+
+const handleSaveConfig = () => {
+  // 这里以后可以替换成调用后端的保存接口
+  console.log('当前保存的配置:', armList[0].current);
+  ElMessage.success('机械臂当前姿态配置已成功保存到云端！');
+};
+
+const handleHistory = () => {
+  ElMessage.info('历史记录面板即将上线，敬请期待...');
+};
+
 // ========== 5. 辅助功能 ==========
 const resetAllAdjust = () => {
   armList.forEach(arm => {
@@ -229,11 +385,12 @@ onMounted(() => {
 });
 </script>
 
+
 <style scoped>
-/* 样式略，与之前一致，保证布局整洁 */
+
 .fine-tuning-container {
-  padding: 20px;
-  background-color: #fff;
+  padding: 30px;
+  background-color: #f0f2f5;
   height: calc(100vh - 150px);
   overflow: auto;
 }
@@ -267,47 +424,122 @@ onMounted(() => {
   display: flex;
   gap: 10px;
 }
+
+/* ========== 卡片美化样式 ========== */
 .arm-list {
   display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 20px;
 }
-.arm-card {
-  flex: 1;
-  min-width: 380px;
+
+.main-control-card {
+  width: 750px; 
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05) !important;
 }
-.current-value {
-  margin-left: 12px;
-  font-size: 12px;
-  color: #666;
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+.header-text {
+  font-weight: bold;
+  font-size: 16px;
+  color: #303133;
+}
+
+.control-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  padding: 10px 20px;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.label-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.label-title {
+  font-weight: 500;
+  color: #606266;
+  font-size: 14px;
+}
+
+.real-time-tag {
+  font-size: 13px;
+  color: #909399;
+  background: #f4f4f5;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 压力传感器黑盒样式 */
+.sensor-panel {
+  margin-top: 40px;
+  background: #2b3243;
+  border-radius: 8px;
+  padding: 20px;
+  color: #fff;
+  text-align: center;
+}
+
+.sensor-title {
+  font-size: 13px;
+  color: #a8abb2;
+  margin-bottom: 12px;
+}
+
+.sensor-value-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.value-text {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+/* 呼吸灯效果 */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #f56c6c;
+  border-radius: 50%;
+}
+
+.pulse {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(245, 108, 108, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 108, 108, 0); }
+}
+
 .batch-bar {
-  margin-top: 24px;
+  margin-top: 30px;
   display: flex;
   gap: 16px;
   justify-content: center;
-}
-
-/* 压力传感器信息样式 */
-.pressure-sensor {
-  margin-top: 16px;
-  padding: 12px 16px;
-  background-color: #f5f7fa;
-  border-radius: 4px;
-  text-align: center;
-  font-size: 14px;
-  color: #606266;
-}
-
-.pressure-label {
-  color: #909399;
-}
-
-.pressure-value {
-  color: #c0c4cc;
-  font-style: italic;
-}
-.el-form-item {
-  margin-bottom: 18px;
 }
 </style>
