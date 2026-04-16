@@ -7,7 +7,8 @@ from robot_control_backend.msg import (
     TelescopicCmd,
     SensorCmd,
     Feedback,
-    IntCmd
+    IntCmd,
+    Kinematics
 )
 
 class FeedbackNode:
@@ -20,7 +21,7 @@ class FeedbackNode:
         self.TELES_MM_PER_REV = 0.7
         self.PRESSURE_MAX_ADC = 16777215
         self.PRESSURE_MAX_KG = 10.0
-        self.MODULE_ID = 1
+        self.MODULE_ID = 17
 
         # ================= 发布者=================
         self.pub_arm_cmd = rospy.Publisher("/arm/cmd_vel", IntCmd, queue_size=10)
@@ -29,6 +30,7 @@ class FeedbackNode:
         self.pub_swing_fb = rospy.Publisher("/hardware/swing_feedback", RotationCmd, queue_size=10)
         self.pub_tel_fb = rospy.Publisher("/hardware/telescope_feedback", TelescopicCmd, queue_size=10)
         self.pub_sensor_fb = rospy.Publisher("/hardware/sensor_feedback", SensorCmd, queue_size=10)
+        self.pub_md_fb = rospy.Publisher("/hardware/module_cmd", Kinematics, queue_size=10)
 
         # ================= 订阅者=================
         rospy.Subscriber("/hardware/all_feedback", Feedback, self.cb_all_fb)
@@ -40,6 +42,7 @@ class FeedbackNode:
     # 收到硬件原始反馈 → 转换单位
     # ==========================
     def cb_all_fb(self, msg):
+        module_id = msg.module_id
         device_id = msg.device_id
         raw_code = msg.position[0]
 
@@ -84,6 +87,14 @@ class FeedbackNode:
             m.device_id = 49
             m.position = [N]
             self.pub_sensor_fb.publish(m)
+        
+        elif device_id == 0:
+            m = Kinematics()
+            m.header = Header()
+            m.module_id = module_id
+            m.device_id = device_id
+            m.position = [0]
+            self.pub_md_fb .publish(m)   
 
     # ==========================
     # 收到轴指令 → 直接转发 /arm/cmd_vel

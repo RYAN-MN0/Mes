@@ -1,78 +1,90 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import rospy
-from std_msgs.msg import Int32  # 下位机收整数，无需引入Float32
-from robot_control_backend.msg import SwingCmd, Feedback  # 导入统一反馈msg
+from std_msgs.msg import Header
+from robot_control_backend.msg import SwingCmd, IntCmd
 
 ## --------------------摆动轴功能节点----------------
 class SwingSimple:
     def __init__(self):
         rospy.init_node("swing_simple_node")
-        rospy.loginfo("✅ 摆动轴节点启动：已加入单位换算，适配双指令+统一反馈")
+        rospy.loginfo("✅ 摆动轴节点启动")
 
-        # --- 核心参数配置 ---
-        # 已知：1编码 = 0.01248°（与旋转轴一致，仅用于度转编码下发下位机）
+        # --- 核心参数 ---
         self.DEGREE_PER_TICK = 0.01248
-        
-        # 核心变量（与旋转轴节点规范统一）
-        self.target_delta_deg = 0.0     # 指令给的：增量角度（度）
-        self.current_swing_deg = 0.0    # 硬件反馈：当前实际角度（度，已由反馈节点转换）
-        self.target_reach_deg = 0.0     # 最终要到达的角度 = 当前 + 增量
 
-        # 订阅双指令话题（按要求订阅微调+运动学计算指令）
-        # 1. 前端下发的摆动轴微调指令
+        # 编码器限位（和旋转轴保持一致）
+        self.ENC_MID = 15000
+        self.ENC_MIN = 580
+        self.ENC_MAX = 29420
+
+        # 核心变量
+        self.target_delta_deg = 0.0
+        self.current_swing_deg = 0.0
+        self.target_reach_deg = 0.0
+
+        # 订阅双指令
         rospy.Subscriber("/control/adjust_swing_cmd", SwingCmd, self.cmd_callback)
-        # 2. 运动计算节点发布的摆动轴运动命令
         rospy.Subscriber("/control/kinematics_swing_cmd", SwingCmd, self.cmd_callback)
-        
-        # 订阅统一硬件反馈：从/hardware/swing_feedback提取摆动轴角度（device_id=34，对应Feedback.msg定义）
-        rospy.Subscriber("/hardware/swing_feedback", Feedback, self.feedback_callback)
-        
-        # 发布话题：发给联通节点、给到下位机的数据（Int32类型，符合要求）
-        self.output_pub = rospy.Publisher("/hardware/swing_output", Int32, queue_size=10)
 
-        self.rate = rospy.Rate(20)  # 20Hz控制频率，与旋转轴节点一致
+        # ==========================
+        # ✅ 修复问题1：消息类型改为 SwingCmd
+        # ==========================
+        rospy.Subscriber("/hardware/swing_feedback", SwingCmd, self.feedback_callback)
+
+        # ==========================
+        # ✅ 修复问题2：输出改为 IntCmd
+        # ==========================
+        self.output_pub = rospy.Publisher("/hardware/swing_output", IntCmd, queue_size=10)
+
+        self.rate = rospy.Rate(20)
 
     def cmd_callback(self, msg):
-        """接收度为单位的增量指令（适配SwingCmd.msg float64[]格式），兼容双话题指令"""
-        # 从SwingCmd的position数组提取第一个元素作为有效增量角度（与旋转轴指令格式统一）
+        """接收增量指令，立刻更新目标（修复问题4）"""
         self.target_delta_deg = msg.position[0]
-        # 区分指令来源（便于调试，明确是微调还是运动学计算指令）
+        # ✅ 修复问题4：收到新指令必须更新目标
+        self.target_reach_deg = self.current_swing_deg + self.target_delta_deg
+
         cmd_topic = msg._connection_header.get('topic', '未知话题')
         if cmd_topic == "/control/adjust_swing_cmd":
-            rospy.loginfo(f"📥 收到摆动轴微调指令：+{self.target_delta_deg:.4f}°")
+            rospy.loginfo(f"📥 摆动轴微调：+{self.target_delta_deg:.4f}°")
         elif cmd_topic == "/control/kinematics_swing_cmd":
-            rospy.loginfo(f"📥 收到摆动轴运动学计算指令：+{self.target_delta_deg:.4f}°")
+            rospy.loginfo(f"📥 摆动轴运动学指令：+{self.target_delta_deg:.4f}°")
 
     def feedback_callback(self, msg):
-        """从统一反馈中提取摆动轴角度（device_id=34，已由反馈节点完成编码→度转换）"""
-        # 只处理摆动轴的反馈数据（严格匹配Feedback.msg的device_id定义：42=摆动轴编码器）
-        if msg.device_id == 34:
-            # 提取角度值（position数组第一个元素，单位：度，适配Feedback.msg float64[]格式）
+        """仅更新当前角度，不覆盖目标"""
+        # ==========================
+        # ✅ 修复问题3：device_id 从 34 → 42
+        # ==========================
+        if msg.device_id == 42:
             self.current_swing_deg = msg.position[0]
-            # 计算最终目标角度（当前角度 + 指令增量角度）
-            self.target_reach_deg = self.current_swing_deg + self.target_delta_deg
-            # 调试日志：确认反馈数据正常接收（终端调试模式可查看）
-            rospy.logdebug(f"📩 收到摆动轴反馈：当前角度{self.current_swing_deg:.2f}°")
+            rospy.logdebug(f"📩 摆动轴反馈：{self.current_swing_deg:.2f}°")
 
     def run(self):
         while not rospy.is_shutdown():
-            # --- 核心逻辑：角度 -> 编码值（适配下位机整数需求）---
-            # 1. 计算原始浮点编码值
-            raw_tick = self.target_reach_deg / self.DEGREE_PER_TICK
-            # 2. 四舍五入取整（下位机只认整数，必须转换）
-            target_tick = int(round(raw_tick))
-            # 3. 发布给下位机（Int32类型，符合要求）
-            self.output_pub.publish(target_tick)
-            
-            # 每秒打印一次日志（便于调试，清晰展示各参数状态，与旋转轴日志风格统一）
-            rospy.loginfo_throttle(1, 
-                f"🔄 摆动轴 | 当前角度:{self.current_swing_deg:.2f}° | "
-                f"增量指令:{self.target_delta_deg:.2f}° | "
-                f"目标角度:{self.target_reach_deg:.2f}° | "
+            # 角度 → 编码器值（中位15000基准）
+            target_tick = self.ENC_MID + int(round(self.target_reach_deg / self.DEGREE_PER_TICK))
+
+            # 硬件限位
+            target_tick = max(self.ENC_MIN, min(target_tick, self.ENC_MAX))
+
+            # 下发 IntCmd
+            int_cmd_msg = IntCmd()
+            int_cmd_msg.header = Header()
+            int_cmd_msg.header.stamp = rospy.Time.now()
+            int_cmd_msg.module_id = 17
+            int_cmd_msg.device_id = 34  # 执行ID = 34
+            int_cmd_msg.position = [target_tick]
+
+            self.output_pub.publish(int_cmd_msg)
+
+            # 日志
+            rospy.loginfo_throttle(1,
+                f"🔄 摆动轴 | 当前:{self.current_swing_deg:.2f}° | "
+                f"目标:{self.target_reach_deg:.2f}° | "
                 f"下发编码:{target_tick}"
             )
-            
+
             self.rate.sleep()
 
 if __name__ == "__main__":
@@ -82,5 +94,4 @@ if __name__ == "__main__":
     except rospy.ROSInterruptException:
         rospy.loginfo("❌ 摆动轴节点停止")
     except Exception as e:
-        # 异常捕获日志，便于排查运行错误（与旋转轴节点规范统一）
-        rospy.logerr(f"❌ 摆动轴节点运行异常：{str(e)}")
+        rospy.logerr(f"❌ 摆动轴异常：{str(e)}")
